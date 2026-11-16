@@ -28,7 +28,7 @@ export function FoamScene({
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 0.2, 3.35], fov: 40, near: 0.1, far: 50 }}
+      camera={{ position: [1.15, 0.35, 2.85], fov: 38, near: 0.1, far: 50 }}
       gl={{
         antialias: true,
         toneMappingExposure: 1.15,
@@ -69,10 +69,10 @@ export function FoamScene({
           brushStrength={brushStrength}
         />
         <ContactShadows
-          position={[0, -1.35, 0]}
-          opacity={0.28}
+          position={[0, -0.88, 0]}
+          opacity={0.32}
           scale={10}
-          blur={3.2}
+          blur={3.4}
           far={4}
           color="#8a847c"
         />
@@ -85,7 +85,7 @@ export function FoamScene({
         minDistance={2}
         maxDistance={6}
         maxPolarAngle={Math.PI * 0.92}
-        target={[0, 0, 0]}
+        target={[0, 0.05, 0]}
       />
     </Canvas>
   );

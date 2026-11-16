@@ -7,10 +7,10 @@ import type { SculptMode, StarterShape } from "@/lib/types";
 
 export function FoamApp() {
   const [mode, setMode] = useState<SculptMode>("cinch");
-  const [shape, setShape] = useState<StarterShape>("figure");
+  const [shape, setShape] = useState<StarterShape>("blank");
   const [shapeVersion, setShapeVersion] = useState(0);
-  const [brushRadius, setBrushRadius] = useState(0.45);
-  const [brushStrength, setBrushStrength] = useState(0.4);
+  const [brushRadius, setBrushRadius] = useState(0.52);
+  const [brushStrength, setBrushStrength] = useState(0.45);
 
   return (
     <div className="foam-app">

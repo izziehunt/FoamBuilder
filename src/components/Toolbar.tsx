@@ -16,14 +16,14 @@ type ToolbarProps = {
 
 const modes: { id: SculptMode; label: string; hint: string }[] = [
   { id: "orbit", label: "Rotate", hint: "Drag to orbit" },
-  { id: "cinch", label: "Cinch", hint: "Hold + drag to gather folds" },
+  { id: "cinch", label: "Cinch", hint: "Hold + drag to fold the sponge" },
   { id: "inflate", label: "Inflate", hint: "Hold to bloat the foam" },
 ];
 
 const shapes: { id: StarterShape; label: string }[] = [
-  { id: "blank", label: "Blank" },
+  { id: "blank", label: "Foam slab" },
   { id: "face", label: "Face hint" },
-  { id: "figure", label: "Figure hint" },
+  { id: "figure", label: "Body hint" },
 ];
 
 export function Toolbar({

@@ -3,10 +3,10 @@
 Sculpt soft foam into faces and figures in the browser.
 
 **v1 (sculpt-first)**
-- Hold + drag **Cinch** to gather folds
+- Start with a vertical **foam slab**
+- Hold + drag **Cinch** to fold it into bodies
 - **Inflate** to bloat volume
-- **Rotate** to orbit the sponge
-- Starters: blank foam, face hint, figure hint
+- Optional light **face** / **body** hints on the same slab
 
 ## Develop
 
