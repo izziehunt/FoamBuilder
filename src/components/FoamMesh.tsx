@@ -42,7 +42,6 @@ export function FoamMesh({
 
   const geometry = useMemo(
     () => createStarterGeometry(shape),
-    // Recreate when user picks a new starter or hits Reset.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [shape, shapeVersion],
   );
@@ -53,53 +52,46 @@ export function FoamMesh({
     const { albedo, bump } = createFoamTextures(512);
     const map = new THREE.CanvasTexture(albedo);
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    map.repeat.set(3.2, 3.2);
+    map.repeat.set(2.8, 2.8);
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
 
     const bumpMap = new THREE.CanvasTexture(bump);
     bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
-    bumpMap.repeat.set(3.2, 3.2);
-    bumpMap.anisotropy = 8;
+    bumpMap.repeat.set(2.8, 2.8);
 
     return new THREE.MeshPhysicalMaterial({
       map,
       bumpMap,
-      bumpScale: 0.045,
-      color: new THREE.Color("#f0e6d6"),
-      roughness: 0.92,
-      metalness: 0.0,
-      sheen: 0.35,
-      sheenRoughness: 0.85,
-      sheenColor: new THREE.Color("#efe4d2"),
-      clearcoat: 0.04,
+      bumpScale: 0.028,
+      color: new THREE.Color("#f4ebdd"),
+      roughness: 0.94,
+      metalness: 0,
+      sheen: 0.4,
+      sheenRoughness: 0.9,
+      sheenColor: new THREE.Color("#efe2cf"),
+      clearcoat: 0.02,
       clearcoatRoughness: 1,
       flatShading: false,
     });
   }, []);
 
-  useEffect(() => {
-    return () => {
-      geometry.dispose();
-    };
-  }, [geometry]);
-
-  useEffect(() => {
-    return () => {
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(
+    () => () => {
       material.map?.dispose();
       material.bumpMap?.dispose();
       material.dispose();
-    };
-  }, [material]);
+    },
+    [material],
+  );
 
   const recomputeNormals = useCallback(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
-    const geo = mesh.geometry;
-    geo.computeVertexNormals();
-    const nAttr = geo.getAttribute("normal");
-    if (nAttr) nAttr.needsUpdate = true;
-    geo.computeBoundingSphere();
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.getAttribute("normal").needsUpdate = true;
+    mesh.geometry.computeBoundingSphere();
   }, []);
 
   const sculptAtPointer = useCallback(
@@ -107,9 +99,8 @@ export function FoamMesh({
       const mesh = meshRef.current;
       if (!mesh || mode === "orbit") return;
 
-      // Cap sculpt rate so fast pointer events don't shatter the mesh.
       const now = performance.now();
-      if (isDrag && now - lastSculptMs.current < 22) return;
+      if (isDrag && now - lastSculptMs.current < 24) return;
       lastSculptMs.current = now;
 
       const rect = gl.domElement.getBoundingClientRect();
@@ -120,21 +111,19 @@ export function FoamMesh({
       const hits = raycaster.current.intersectObject(mesh, false);
       if (!hits.length) return;
 
-      const hit = hits[0];
-      worldHit.current.copy(hit.point);
+      worldHit.current.copy(hits[0].point);
       invMatrix.current.copy(mesh.matrixWorld).invert();
       hitLocal.current.copy(worldHit.current).applyMatrix4(invMatrix.current);
 
-      const geo = mesh.geometry;
-      const pos = geo.getAttribute("position") as THREE.BufferAttribute;
-      const nrm = geo.getAttribute("normal") as THREE.BufferAttribute;
+      const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const nrm = mesh.geometry.getAttribute("normal") as THREE.BufferAttribute;
 
       if (mode === "cinch") {
-        if (isDrag) {
-          dragLocal.current.subVectors(hitLocal.current, lastHit.current);
-        } else {
-          dragLocal.current.set(0, 0, 0);
-        }
+        dragLocal.current.copy(
+          isDrag
+            ? hitLocal.current.clone().sub(lastHit.current)
+            : new THREE.Vector3(),
+        );
         applyCinch(
           pos,
           nrm,
@@ -196,7 +185,7 @@ export function FoamMesh({
   useFrame((_, dt) => {
     const mesh = meshRef.current;
     if (!mesh || sculpting.current || mode !== "orbit") return;
-    mesh.rotation.y += dt * 0.05;
+    mesh.rotation.y += dt * 0.04;
   });
 
   const ringRef = useRef<THREE.Mesh>(null);
@@ -226,7 +215,7 @@ export function FoamMesh({
         <meshBasicMaterial
           color="#5c4a3a"
           transparent
-          opacity={0.3}
+          opacity={0.28}
           side={THREE.DoubleSide}
           depthTest={false}
         />

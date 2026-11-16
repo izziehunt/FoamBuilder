@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { StarterShape } from "@/lib/types";
 
 function smoothStep(edge0: number, edge1: number, x: number) {
@@ -18,11 +19,13 @@ function softBlob(
   return falloff * amount;
 }
 
-/** Build a high-res foam starter mesh as a BufferGeometry. */
+/**
+ * Dense indexed foam mesh. (Recent Three.js icospheres are sparse +
+ * non-indexed, which made sculpting tear faces apart.)
+ */
 export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
-  // Dense icosphere so folds stay rounded instead of faceted.
-  const detail = 6;
-  const geo = new THREE.IcosahedronGeometry(1, detail);
+  // ~18k triangles — smooth enough for soft folds, still interactive.
+  let geo: THREE.BufferGeometry = new THREE.SphereGeometry(1, 96, 96);
 
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
@@ -33,63 +36,50 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
     n.copy(v).normalize();
 
     if (shape === "blank") {
-      // Soft irregular sponge — very subtle, keeps a smooth foam read.
       const wobble =
-        0.018 * Math.sin(v.x * 2.4 + v.y * 1.8) +
-        0.014 * Math.cos(v.z * 2.1 - v.x * 1.4) +
-        0.01 * Math.sin(v.y * 3.1 + v.z * 2.2);
+        0.012 * Math.sin(v.x * 2.2 + v.y * 1.6) +
+        0.01 * Math.cos(v.z * 1.9 - v.x * 1.3);
       v.copy(n).multiplyScalar(1 + wobble);
     } else if (shape === "face") {
-      // Round foam head with soft cheek / brow / jaw suggestions.
-      let r = 1.05;
-      r += softBlob(v, new THREE.Vector3(0.32, 0.12, 0.72), 0.42, 0.14);
-      r += softBlob(v, new THREE.Vector3(-0.32, 0.12, 0.72), 0.42, 0.14);
-      r += softBlob(v, new THREE.Vector3(0, 0.42, 0.68), 0.5, 0.08);
-      r -= softBlob(v, new THREE.Vector3(0.22, 0.22, 0.9), 0.18, 0.06);
-      r -= softBlob(v, new THREE.Vector3(-0.22, 0.22, 0.9), 0.18, 0.06);
-      r += softBlob(v, new THREE.Vector3(0, -0.05, 0.95), 0.16, 0.05);
-      r += softBlob(v, new THREE.Vector3(0, -0.55, 0.55), 0.45, 0.1);
-      r *= 1 + 0.02 * Math.sin(v.x * 5 + v.y * 3);
+      let r = 1.02;
+      r += softBlob(v, new THREE.Vector3(0.34, 0.1, 0.7), 0.45, 0.12);
+      r += softBlob(v, new THREE.Vector3(-0.34, 0.1, 0.7), 0.45, 0.12);
+      r += softBlob(v, new THREE.Vector3(0, 0.4, 0.65), 0.5, 0.07);
+      r -= softBlob(v, new THREE.Vector3(0.2, 0.2, 0.92), 0.16, 0.045);
+      r -= softBlob(v, new THREE.Vector3(-0.2, 0.2, 0.92), 0.16, 0.045);
+      r += softBlob(v, new THREE.Vector3(0, -0.02, 0.96), 0.14, 0.04);
+      r += softBlob(v, new THREE.Vector3(0, -0.5, 0.55), 0.48, 0.09);
       v.copy(n).multiplyScalar(r);
     } else {
-      // Hinted figure: soft head + torso + stubby limbs, still one foam piece.
+      let r = 0.78;
       const y = v.y;
-      let r = 0.72;
-
-      // Torso core
       const torso = smoothStep(-0.55, 0.15, y) * smoothStep(0.85, 0.25, y);
-      r += torso * 0.28;
-      r += softBlob(v, new THREE.Vector3(0, 0.05, 0.15), 0.7, 0.18);
-
-      // Head
-      r += softBlob(v, new THREE.Vector3(0, 0.95, 0.05), 0.42, 0.38);
-
-      // Shoulders / hips
-      r += softBlob(v, new THREE.Vector3(0.45, 0.35, 0), 0.35, 0.16);
-      r += softBlob(v, new THREE.Vector3(-0.45, 0.35, 0), 0.35, 0.16);
-      r += softBlob(v, new THREE.Vector3(0.28, -0.35, 0.05), 0.32, 0.12);
-      r += softBlob(v, new THREE.Vector3(-0.28, -0.35, 0.05), 0.32, 0.12);
-
-      // Arm stubs
-      r += softBlob(v, new THREE.Vector3(0.7, 0.15, 0), 0.28, 0.2);
-      r += softBlob(v, new THREE.Vector3(-0.7, 0.15, 0), 0.28, 0.2);
-
-      // Leg stubs
-      r += softBlob(v, new THREE.Vector3(0.22, -0.85, 0.05), 0.32, 0.22);
-      r += softBlob(v, new THREE.Vector3(-0.22, -0.85, 0.05), 0.32, 0.22);
-
-      // Belly hint
-      r += softBlob(v, new THREE.Vector3(0, -0.05, 0.35), 0.4, 0.1);
-
-      r *= 1 + 0.015 * Math.sin(v.x * 4.2 + v.z * 3.1);
+      r += torso * 0.22;
+      r += softBlob(v, new THREE.Vector3(0, 0.05, 0.12), 0.72, 0.16);
+      r += softBlob(v, new THREE.Vector3(0, 0.95, 0.04), 0.4, 0.34);
+      r += softBlob(v, new THREE.Vector3(0.48, 0.32, 0), 0.34, 0.14);
+      r += softBlob(v, new THREE.Vector3(-0.48, 0.32, 0), 0.34, 0.14);
+      r += softBlob(v, new THREE.Vector3(0.28, -0.35, 0.04), 0.3, 0.1);
+      r += softBlob(v, new THREE.Vector3(-0.28, -0.35, 0.04), 0.3, 0.1);
+      r += softBlob(v, new THREE.Vector3(0.68, 0.12, 0), 0.26, 0.16);
+      r += softBlob(v, new THREE.Vector3(-0.68, 0.12, 0), 0.26, 0.16);
+      r += softBlob(v, new THREE.Vector3(0.22, -0.85, 0.04), 0.3, 0.2);
+      r += softBlob(v, new THREE.Vector3(-0.22, -0.85, 0.04), 0.3, 0.2);
+      r += softBlob(v, new THREE.Vector3(0, -0.05, 0.35), 0.42, 0.09);
       v.copy(n).multiplyScalar(r);
     }
 
     pos.setXYZ(i, v.x, v.y, v.z);
   }
 
-  geo.computeVertexNormals();
-  // Center and normalize scale a bit so all starters fill the frame similarly.
+  pos.needsUpdate = true;
+
+  // Weld any coincident verts and guarantee indexed topology for smooth sculpt.
+  geo.deleteAttribute("normal");
+  geo = mergeVertices(geo, 1e-4);
+
+  // Fit in frame.
+  const weldedPos = geo.attributes.position as THREE.BufferAttribute;
   geo.computeBoundingBox();
   const box = geo.boundingBox!;
   const center = new THREE.Vector3();
@@ -99,20 +89,20 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
   const scale = 1.55 / maxDim;
 
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i);
+  for (let i = 0; i < weldedPos.count; i++) {
+    v.fromBufferAttribute(weldedPos, i);
     v.sub(center).multiplyScalar(scale);
-    pos.setXYZ(i, v.x, v.y, v.z);
+    weldedPos.setXYZ(i, v.x, v.y, v.z);
   }
+  weldedPos.needsUpdate = true;
 
-  pos.needsUpdate = true;
-
-  // Spherical UVs so the porous foam map wraps the blob.
-  const uvs = new Float32Array(pos.count * 2);
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i).normalize();
+  // Fresh spherical UVs after weld (sphere UVs can seam after merge).
+  const uvs = new Float32Array(weldedPos.count * 2);
+  for (let i = 0; i < weldedPos.count; i++) {
+    v.fromBufferAttribute(weldedPos, i).normalize();
     uvs[i * 2] = 0.5 + Math.atan2(v.z, v.x) / (Math.PI * 2);
-    uvs[i * 2 + 1] = 0.5 + Math.asin(THREE.MathUtils.clamp(v.y, -1, 1)) / Math.PI;
+    uvs[i * 2 + 1] =
+      0.5 + Math.asin(THREE.MathUtils.clamp(v.y, -1, 1)) / Math.PI;
   }
   geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 
