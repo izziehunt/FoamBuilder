@@ -20,21 +20,18 @@ export function createFoamTextures(size = 1024): FoamMaps {
       const u = x / size;
       const v = y / size;
 
-      // Primary open cells.
-      const cell = worley(u * 42, v * 42);
-      // Secondary finer cells.
-      const fine = worley(u * 90 + 17, v * 90 + 9);
-      // Soft density variation across the foam block.
-      const macro = fbm(u * 6, v * 6);
+      // Finer open cells — closer to upholstery foam in the photo.
+      const cell = worley(u * 58, v * 58);
+      const fine = worley(u * 120 + 17, v * 120 + 9);
+      const macro = fbm(u * 5, v * 5);
 
-      // Open-cell look: deep round pits, raised thin walls.
-      const pit = Math.pow(cell, 1.55);
-      const micro = Math.pow(fine, 1.8);
-      let h = 0.55 + macro * 0.12;
-      h -= pit * 0.55;
-      h -= micro * 0.18;
-      // Slight wall ridges between cells.
-      h += (1 - cell) * (1 - cell) * 0.08;
+      // Soft pits (photo foam is porous, not deeply pitted).
+      const pit = Math.pow(cell, 1.35);
+      const micro = Math.pow(fine, 1.6);
+      let h = 0.62 + macro * 0.08;
+      h -= pit * 0.38;
+      h -= micro * 0.14;
+      h += (1 - cell) * (1 - cell) * 0.05;
 
       height[y * size + x] = clamp01(h);
     }
@@ -52,48 +49,46 @@ export function createFoamTextures(size = 1024): FoamMaps {
   const rctx = roughness.getContext("2d")!;
   const rImg = rctx.createImageData(size, size);
 
-  // Warm polyurethane foam palette (from reference).
-  const baseR = 214;
-  const baseG = 186;
-  const baseB = 140;
-  const poreR = 150;
-  const poreG = 118;
-  const poreB = 78;
-  const wallR = 232;
-  const wallG = 208;
-  const wallB = 168;
+  // Pale yellow-tan polyurethane — sampled toward the reference photo.
+  const baseR = 236;
+  const baseG = 220;
+  const baseB = 186;
+  const poreR = 198;
+  const poreG = 172;
+  const poreB = 128;
+  const wallR = 245;
+  const wallG = 232;
+  const wallB = 204;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       const h = height[y * size + x];
-      const cell = worley((x / size) * 42, (y / size) * 42);
+      const cell = worley((x / size) * 58, (y / size) * 58);
       const grain = hash2(x * 0.37, y * 0.41);
 
-      // Deep pores darken; thin walls stay lighter.
-      const poreMix = THREE_Math_smoothstep(0.35, 0.75, 1 - h);
-      const wallMix = THREE_Math_smoothstep(0.55, 0.95, h) * (1 - cell);
+      const poreMix = THREE_Math_smoothstep(0.4, 0.82, 1 - h) * 0.75;
+      const wallMix = THREE_Math_smoothstep(0.58, 0.95, h) * (1 - cell) * 0.45;
 
       let r = lerp(baseR, poreR, poreMix);
       let g = lerp(baseG, poreG, poreMix);
       let b = lerp(baseB, poreB, poreMix);
-      r = lerp(r, wallR, wallMix * 0.55);
-      g = lerp(g, wallG, wallMix * 0.55);
-      b = lerp(b, wallB, wallMix * 0.55);
+      r = lerp(r, wallR, wallMix);
+      g = lerp(g, wallG, wallMix);
+      b = lerp(b, wallB, wallMix);
 
-      // Fine sponge grain.
-      const gAmt = (grain - 0.5) * 14;
+      // Soft sponge grain — keep contrast low like the photo.
+      const gAmt = (grain - 0.5) * 9;
       r = clamp(r + gAmt);
-      g = clamp(g + gAmt * 0.9);
-      b = clamp(b + gAmt * 0.7);
+      g = clamp(g + gAmt * 0.92);
+      b = clamp(b + gAmt * 0.75);
 
       aImg.data[i] = r;
       aImg.data[i + 1] = g;
       aImg.data[i + 2] = b;
       aImg.data[i + 3] = 255;
 
-      // Pores a bit glossier-dark; walls chalk-matte.
-      const rough = clamp(210 + h * 35 - poreMix * 25);
+      const rough = clamp(225 + h * 25 - poreMix * 12);
       rImg.data[i] = rough;
       rImg.data[i + 1] = rough;
       rImg.data[i + 2] = rough;
@@ -104,7 +99,7 @@ export function createFoamTextures(size = 1024): FoamMaps {
   actx.putImageData(aImg, 0, 0);
   rctx.putImageData(rImg, 0, 0);
 
-  const normal = heightToNormalCanvas(height, size, 6.5);
+  const normal = heightToNormalCanvas(height, size, 4.2);
 
   return { albedo, normal, roughness, height, size };
 }

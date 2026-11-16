@@ -3,11 +3,11 @@
 :root {
   --foam-ink: #2a221c;
   --foam-muted: #6d5c4d;
-  --foam-panel: rgba(250, 244, 235, 0.82);
-  --foam-panel-border: rgba(62, 48, 36, 0.14);
+  --foam-panel: rgba(255, 255, 255, 0.88);
+  --foam-panel-border: rgba(42, 34, 28, 0.12);
   --foam-active: #3d3228;
   --foam-active-text: #f7f0e6;
-  --foam-studio: #d9cfc2;
+  --foam-studio: #ffffff;
   --background: var(--foam-studio);
   --foreground: var(--foam-ink);
 }
@@ -48,10 +48,7 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 35%, rgba(255, 250, 242, 0.55), transparent 70%),
-    radial-gradient(ellipse 50% 40% at 80% 80%, rgba(180, 150, 120, 0.22), transparent 65%),
-    linear-gradient(165deg, #e8dfd2 0%, #d4c6b4 48%, #cbbba8 100%);
+  background: #ffffff;
 }
 
 .foam-canvas {
@@ -92,7 +89,7 @@ body {
   background: var(--foam-panel);
   border: 1px solid var(--foam-panel-border);
   backdrop-filter: blur(14px) saturate(1.1);
-  box-shadow: 0 18px 40px rgba(42, 34, 28, 0.12);
+  box-shadow: 0 12px 36px rgba(30, 28, 24, 0.1);
   animation: toolbar-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 

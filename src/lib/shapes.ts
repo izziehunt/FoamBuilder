@@ -112,7 +112,7 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   applyFoamMicroRelief(
     geo.getAttribute("position") as THREE.BufferAttribute,
     geo.getAttribute("normal") as THREE.BufferAttribute,
-    0.014,
+    0.009,
   );
   geo.computeVertexNormals();
   geo.computeBoundingSphere();

@@ -50,7 +50,7 @@ export function FoamMesh({
 
   const material = useMemo(() => {
     const maps = createFoamTextures(1024);
-    const repeat = new THREE.Vector2(4.5, 4.5);
+    const repeat = new THREE.Vector2(5.5, 5.5);
 
     const map = new THREE.CanvasTexture(maps.albedo);
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
@@ -67,18 +67,25 @@ export function FoamMesh({
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
     roughnessMap.repeat.copy(repeat);
 
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshPhysicalMaterial({
       map,
       normalMap,
-      normalScale: new THREE.Vector2(1.15, 1.15),
+      normalScale: new THREE.Vector2(0.75, 0.75),
       roughnessMap,
-      color: new THREE.Color("#e8d4b0"),
-      roughness: 1,
+      // Pale foam tint — multiply with albedo toward the photo.
+      color: new THREE.Color("#f3e6c8"),
+      roughness: 0.98,
       metalness: 0,
+      // Hint of soft subsurface so thick foam doesn’t look plastic.
+      sheen: 0.18,
+      sheenRoughness: 1,
+      sheenColor: new THREE.Color("#f0dfb8"),
+      clearcoat: 0,
+      envMapIntensity: 0.15,
       flatShading: false,
     });
 
-    // Deepen open-cell pits so the surface reads like polyurethane foam.
+    // Gentle pore cavity shading — keep it light like the reference.
     mat.onBeforeCompile = (shader) => {
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <map_fragment>",
@@ -86,14 +93,14 @@ export function FoamMesh({
         #include <map_fragment>
         float poreLuma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
         diffuseColor.rgb = mix(
-          diffuseColor.rgb * 0.78,
+          diffuseColor.rgb * 0.9,
           diffuseColor.rgb,
-          smoothstep(0.32, 0.6, poreLuma)
+          smoothstep(0.42, 0.7, poreLuma)
         );
         `,
       );
     };
-    mat.customProgramCacheKey = () => "foam-open-cell-v3";
+    mat.customProgramCacheKey = () => "foam-photo-match-v1";
 
     return mat;
   }, []);
