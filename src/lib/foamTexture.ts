@@ -1,3 +1,5 @@
+import type { BufferAttribute } from "three";
+
 /**
  * Procedural open-cell upholstery foam maps (albedo / normal / roughness).
  * Tuned toward polyurethane cushion foam: warm tan, visible pores, dead matte.
@@ -106,11 +108,10 @@ export function createFoamTextures(size = 1024): FoamMaps {
 
 /** Optional: bake micro pore relief into mesh normals via slight position jitter. */
 export function applyFoamMicroRelief(
-  positions: THREE.BufferAttribute,
-  normals: THREE.BufferAttribute,
+  positions: BufferAttribute,
+  normals: BufferAttribute,
   amount = 0.012,
 ) {
-  const v = { x: 0, y: 0, z: 0 };
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i);
     const y = positions.getY(i);
