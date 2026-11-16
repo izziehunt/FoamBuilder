@@ -4,8 +4,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ThreeEvent, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { createStarterGeometry } from "@/lib/shapes";
-import { applyCinch, applyInflate } from "@/lib/sculpt";
-import { createFoamAlbedoTexture } from "@/lib/foamTexture";
+import {
+  applyCinch,
+  applyInflate,
+  buildAdjacency,
+} from "@/lib/sculpt";
+import { createFoamTextures } from "@/lib/foamTexture";
 import type { SculptMode, StarterShape } from "@/lib/types";
 
 type FoamMeshProps = {
@@ -26,14 +30,13 @@ export function FoamMesh({
   const meshRef = useRef<THREE.Mesh>(null);
   const sculpting = useRef(false);
   const lastHit = useRef(new THREE.Vector3());
-  const lastPointer = useRef(new THREE.Vector2());
-  const normalScratch = useRef(new THREE.Vector3());
   const hitLocal = useRef(new THREE.Vector3());
   const dragLocal = useRef(new THREE.Vector3());
   const worldHit = useRef(new THREE.Vector3());
   const invMatrix = useRef(new THREE.Matrix4());
   const raycaster = useRef(new THREE.Raycaster());
   const pointerNdc = useRef(new THREE.Vector2());
+  const lastSculptMs = useRef(0);
 
   const { camera, gl } = useThree();
 
@@ -44,20 +47,33 @@ export function FoamMesh({
     [shape, shapeVersion],
   );
 
-  const material = useMemo(() => {
-    const canvas = createFoamAlbedoTexture(512);
-    const map = new THREE.CanvasTexture(canvas);
-    map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    map.repeat.set(2.4, 2.4);
-    map.colorSpace = THREE.SRGBColorSpace;
-    map.anisotropy = 4;
+  const adjacency = useMemo(() => buildAdjacency(geometry), [geometry]);
 
-    return new THREE.MeshStandardMaterial({
+  const material = useMemo(() => {
+    const { albedo, bump } = createFoamTextures(512);
+    const map = new THREE.CanvasTexture(albedo);
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(3.2, 3.2);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = 8;
+
+    const bumpMap = new THREE.CanvasTexture(bump);
+    bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+    bumpMap.repeat.set(3.2, 3.2);
+    bumpMap.anisotropy = 8;
+
+    return new THREE.MeshPhysicalMaterial({
       map,
-      color: new THREE.Color("#fff6ea"),
-      roughness: 0.98,
+      bumpMap,
+      bumpScale: 0.045,
+      color: new THREE.Color("#f0e6d6"),
+      roughness: 0.92,
       metalness: 0.0,
-      envMapIntensity: 0.25,
+      sheen: 0.35,
+      sheenRoughness: 0.85,
+      sheenColor: new THREE.Color("#efe4d2"),
+      clearcoat: 0.04,
+      clearcoatRoughness: 1,
       flatShading: false,
     });
   }, []);
@@ -71,6 +87,7 @@ export function FoamMesh({
   useEffect(() => {
     return () => {
       material.map?.dispose();
+      material.bumpMap?.dispose();
       material.dispose();
     };
   }, [material]);
@@ -82,12 +99,18 @@ export function FoamMesh({
     geo.computeVertexNormals();
     const nAttr = geo.getAttribute("normal");
     if (nAttr) nAttr.needsUpdate = true;
+    geo.computeBoundingSphere();
   }, []);
 
   const sculptAtPointer = useCallback(
     (clientX: number, clientY: number, isDrag: boolean) => {
       const mesh = meshRef.current;
       if (!mesh || mode === "orbit") return;
+
+      // Cap sculpt rate so fast pointer events don't shatter the mesh.
+      const now = performance.now();
+      if (isDrag && now - lastSculptMs.current < 22) return;
+      lastSculptMs.current = now;
 
       const rect = gl.domElement.getBoundingClientRect();
       pointerNdc.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -119,16 +142,31 @@ export function FoamMesh({
           dragLocal.current,
           brushRadius,
           brushStrength,
+          adjacency,
         );
       } else if (mode === "inflate") {
-        applyInflate(pos, nrm, hitLocal.current, brushRadius, brushStrength);
+        applyInflate(
+          pos,
+          nrm,
+          hitLocal.current,
+          brushRadius,
+          brushStrength,
+          adjacency,
+        );
       }
 
       lastHit.current.copy(hitLocal.current);
-      lastPointer.current.set(clientX, clientY);
       recomputeNormals();
     },
-    [brushRadius, brushStrength, camera, gl.domElement, mode, recomputeNormals],
+    [
+      adjacency,
+      brushRadius,
+      brushStrength,
+      camera,
+      gl.domElement,
+      mode,
+      recomputeNormals,
+    ],
   );
 
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
@@ -136,6 +174,7 @@ export function FoamMesh({
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     sculpting.current = true;
+    lastSculptMs.current = 0;
     sculptAtPointer(e.clientX, e.clientY, false);
   };
 
@@ -154,23 +193,19 @@ export function FoamMesh({
     }
   };
 
-  // Keep a gentle idle — helps perceive matte foam volume under soft light.
   useFrame((_, dt) => {
     const mesh = meshRef.current;
     if (!mesh || sculpting.current || mode !== "orbit") return;
     mesh.rotation.y += dt * 0.05;
   });
 
-  // Brush cursor ring (local space approx via child).
   const ringRef = useRef<THREE.Mesh>(null);
   useFrame(() => {
     const ring = ringRef.current;
-    const mesh = meshRef.current;
-    if (!ring || !mesh) return;
+    if (!ring) return;
     ring.visible = mode !== "orbit" && sculpting.current;
     if (!ring.visible) return;
     ring.position.copy(lastHit.current);
-    normalScratch.current.set(0, 1, 0);
     ring.scale.setScalar(brushRadius);
   });
 
@@ -191,7 +226,7 @@ export function FoamMesh({
         <meshBasicMaterial
           color="#5c4a3a"
           transparent
-          opacity={0.35}
+          opacity={0.3}
           side={THREE.DoubleSide}
           depthTest={false}
         />

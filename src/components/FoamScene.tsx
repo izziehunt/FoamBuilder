@@ -25,19 +25,20 @@ export function FoamScene({
     <Canvas
       shadows
       camera={{ position: [0, 0.35, 3.4], fov: 42, near: 0.1, far: 50 }}
-      gl={{ antialias: true, toneMappingExposure: 1.05 }}
-      dpr={[1, 1.75]}
+      gl={{ antialias: true, toneMappingExposure: 1.12 }}
+      dpr={[1, 2]}
       style={{ touchAction: "none" }}
     >
       <color attach="background" args={["#d9cfc2"]} />
       <fog attach="fog" args={["#d9cfc2", 10, 22]} />
 
-      <hemisphereLight args={["#fff8ef", "#b7a48c", 0.85]} />
+      {/* Soft wrap lighting so foam reads round, not faceted. */}
+      <hemisphereLight args={["#fffaf2", "#c4b49a", 1.05]} />
       <directionalLight
         castShadow
-        position={[3.2, 5.2, 2.8]}
-        intensity={1.55}
-        color="#fff4e6"
+        position={[2.8, 5.5, 3.2]}
+        intensity={1.05}
+        color="#fff6ea"
         shadow-mapSize={[1024, 1024]}
         shadow-camera-near={0.5}
         shadow-camera-far={20}
@@ -46,7 +47,8 @@ export function FoamScene({
         shadow-camera-top={4}
         shadow-camera-bottom={-4}
       />
-      <directionalLight position={[-2.5, 1.5, -2]} intensity={0.4} color="#ffe8d0" />
+      <directionalLight position={[-3, 2.2, -1.5]} intensity={0.55} color="#ffe8d2" />
+      <directionalLight position={[0, -2, 2]} intensity={0.2} color="#d9cfc2" />
 
       <Suspense fallback={null}>
         <FoamMesh

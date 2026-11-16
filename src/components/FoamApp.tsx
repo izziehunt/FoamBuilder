@@ -9,8 +9,8 @@ export function FoamApp() {
   const [mode, setMode] = useState<SculptMode>("cinch");
   const [shape, setShape] = useState<StarterShape>("figure");
   const [shapeVersion, setShapeVersion] = useState(0);
-  const [brushRadius, setBrushRadius] = useState(0.38);
-  const [brushStrength, setBrushStrength] = useState(0.55);
+  const [brushRadius, setBrushRadius] = useState(0.45);
+  const [brushStrength, setBrushStrength] = useState(0.4);
 
   return (
     <div className="foam-app">

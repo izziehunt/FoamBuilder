@@ -20,7 +20,8 @@ function softBlob(
 
 /** Build a high-res foam starter mesh as a BufferGeometry. */
 export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
-  const detail = 5;
+  // Dense icosphere so folds stay rounded instead of faceted.
+  const detail = 6;
   const geo = new THREE.IcosahedronGeometry(1, detail);
 
   const pos = geo.attributes.position as THREE.BufferAttribute;
@@ -32,11 +33,11 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
     n.copy(v).normalize();
 
     if (shape === "blank") {
-      // Soft irregular sponge — barely uneven, no figure hint.
+      // Soft irregular sponge — very subtle, keeps a smooth foam read.
       const wobble =
-        0.04 * Math.sin(v.x * 3.1 + v.y * 2.4) +
-        0.03 * Math.cos(v.z * 2.7 - v.x * 1.8) +
-        0.02 * Math.sin(v.y * 4.2 + v.z * 3.3);
+        0.018 * Math.sin(v.x * 2.4 + v.y * 1.8) +
+        0.014 * Math.cos(v.z * 2.1 - v.x * 1.4) +
+        0.01 * Math.sin(v.y * 3.1 + v.z * 2.2);
       v.copy(n).multiplyScalar(1 + wobble);
     } else if (shape === "face") {
       // Round foam head with soft cheek / brow / jaw suggestions.

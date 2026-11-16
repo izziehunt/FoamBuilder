@@ -1,50 +1,82 @@
-/** Procedural porous foam albedo (matte sponge look). */
-export function createFoamAlbedoTexture(size = 512): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
+/** Procedural porous foam albedo + matching bump (matte open-cell sponge). */
+export function createFoamTextures(size = 512): {
+  albedo: HTMLCanvasElement;
+  bump: HTMLCanvasElement;
+} {
+  const albedo = document.createElement("canvas");
+  albedo.width = size;
+  albedo.height = size;
+  const actx = albedo.getContext("2d")!;
 
-  // Base foam — warm matte sponge, not pure white.
-  ctx.fillStyle = "#efe6d8";
-  ctx.fillRect(0, 0, size, size);
+  // Warm sponge base — like upholstery foam.
+  actx.fillStyle = "#e8dcc8";
+  actx.fillRect(0, 0, size, size);
 
-  const image = ctx.getImageData(0, 0, size, size);
+  const image = actx.getImageData(0, 0, size, size);
   const data = image.data;
+  const bumpData = new Uint8ClampedArray(size * size * 4);
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
-      // Layered value noise for open-cell pores.
-      const n1 = hash2(x * 0.08, y * 0.08);
-      const n2 = hash2(x * 0.22 + 40, y * 0.22 + 11);
-      const n3 = hash2(x * 0.55 + 7, y * 0.55 + 19);
-      const pore = Math.pow(n1 * 0.55 + n2 * 0.3 + n3 * 0.15, 1.35);
+      const n1 = hash2(x * 0.07, y * 0.07);
+      const n2 = hash2(x * 0.19 + 40, y * 0.19 + 11);
+      const n3 = hash2(x * 0.48 + 7, y * 0.48 + 19);
+      const n4 = hash2(x * 1.1 + 3, y * 1.1 + 9);
+      const pore = Math.pow(n1 * 0.4 + n2 * 0.3 + n3 * 0.2 + n4 * 0.1, 1.25);
 
-      const shade = (pore - 0.45) * 38;
-      data[i] = clamp(data[i] + shade * 0.85 - pore * 12);
-      data[i + 1] = clamp(data[i + 1] + shade * 0.75 - pore * 10);
-      data[i + 2] = clamp(data[i + 2] + shade * 0.55 - pore * 8);
+      // Soft cell variation — avoid harsh white speckles that look like cracks.
+      const shade = (pore - 0.5) * 28;
+      data[i] = clamp(232 + shade - pore * 18);
+      data[i + 1] = clamp(220 + shade * 0.9 - pore * 14);
+      data[i + 2] = clamp(200 + shade * 0.65 - pore * 10);
+      data[i + 3] = 255;
+
+      const b = clamp(140 + pore * 90);
+      bumpData[i] = b;
+      bumpData[i + 1] = b;
+      bumpData[i + 2] = b;
+      bumpData[i + 3] = 255;
     }
   }
 
-  ctx.putImageData(image, 0, 0);
+  actx.putImageData(image, 0, 0);
 
-  // Soft larger cell pits.
-  for (let k = 0; k < 1400; k++) {
+  // Soft larger open cells (subtle pits, not speckles).
+  for (let k = 0; k < 900; k++) {
     const px = Math.random() * size;
     const py = Math.random() * size;
-    const r = 0.6 + Math.random() * 2.8;
-    const g = ctx.createRadialGradient(px, py, 0, px, py, r);
-    g.addColorStop(0, "rgba(120, 100, 80, 0.18)");
-    g.addColorStop(1, "rgba(120, 100, 80, 0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fill();
+    const r = 1.2 + Math.random() * 3.5;
+    const g = actx.createRadialGradient(px, py, 0, px, py, r);
+    g.addColorStop(0, "rgba(110, 90, 70, 0.14)");
+    g.addColorStop(1, "rgba(110, 90, 70, 0)");
+    actx.fillStyle = g;
+    actx.beginPath();
+    actx.arc(px, py, r, 0, Math.PI * 2);
+    actx.fill();
   }
 
-  return canvas;
+  const bump = document.createElement("canvas");
+  bump.width = size;
+  bump.height = size;
+  const bctx = bump.getContext("2d")!;
+  bctx.putImageData(new ImageData(bumpData, size, size), 0, 0);
+
+  // Soften bump pits.
+  for (let k = 0; k < 700; k++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const r = 1 + Math.random() * 3;
+    const g = bctx.createRadialGradient(px, py, 0, px, py, r);
+    g.addColorStop(0, "rgba(40, 40, 40, 0.35)");
+    g.addColorStop(1, "rgba(40, 40, 40, 0)");
+    bctx.fillStyle = g;
+    bctx.beginPath();
+    bctx.arc(px, py, r, 0, Math.PI * 2);
+    bctx.fill();
+  }
+
+  return { albedo, bump };
 }
 
 function hash2(x: number, y: number) {
