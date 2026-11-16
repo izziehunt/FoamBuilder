@@ -49,38 +49,61 @@ export function FoamMesh({
   const adjacency = useMemo(() => buildAdjacency(geometry), [geometry]);
 
   const material = useMemo(() => {
-    const { albedo, bump } = createFoamTextures(512);
-    const map = new THREE.CanvasTexture(albedo);
+    const maps = createFoamTextures(1024);
+    const repeat = new THREE.Vector2(4.5, 4.5);
+
+    const map = new THREE.CanvasTexture(maps.albedo);
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    map.repeat.set(2.8, 2.8);
+    map.repeat.copy(repeat);
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
 
-    const bumpMap = new THREE.CanvasTexture(bump);
-    bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
-    bumpMap.repeat.set(2.8, 2.8);
+    const normalMap = new THREE.CanvasTexture(maps.normal);
+    normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+    normalMap.repeat.copy(repeat);
+    normalMap.anisotropy = 8;
 
-    return new THREE.MeshPhysicalMaterial({
+    const roughnessMap = new THREE.CanvasTexture(maps.roughness);
+    roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+    roughnessMap.repeat.copy(repeat);
+
+    const mat = new THREE.MeshStandardMaterial({
       map,
-      bumpMap,
-      bumpScale: 0.028,
-      color: new THREE.Color("#f4ebdd"),
-      roughness: 0.94,
+      normalMap,
+      normalScale: new THREE.Vector2(1.15, 1.15),
+      roughnessMap,
+      color: new THREE.Color("#e8d4b0"),
+      roughness: 1,
       metalness: 0,
-      sheen: 0.4,
-      sheenRoughness: 0.9,
-      sheenColor: new THREE.Color("#efe2cf"),
-      clearcoat: 0.02,
-      clearcoatRoughness: 1,
       flatShading: false,
     });
+
+    // Deepen open-cell pits so the surface reads like polyurethane foam.
+    mat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        /* glsl */ `
+        #include <map_fragment>
+        float poreLuma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+        diffuseColor.rgb = mix(
+          diffuseColor.rgb * 0.78,
+          diffuseColor.rgb,
+          smoothstep(0.32, 0.6, poreLuma)
+        );
+        `,
+      );
+    };
+    mat.customProgramCacheKey = () => "foam-open-cell-v3";
+
+    return mat;
   }, []);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(
     () => () => {
       material.map?.dispose();
-      material.bumpMap?.dispose();
+      material.normalMap?.dispose();
+      material.roughnessMap?.dispose();
       material.dispose();
     },
     [material],

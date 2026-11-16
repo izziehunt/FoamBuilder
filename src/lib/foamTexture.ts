@@ -1,74 +1,189 @@
-/** Soft open-cell foam albedo + gentle bump (no crack-like speckles). */
-export function createFoamTextures(size = 512): {
+/**
+ * Procedural open-cell upholstery foam maps (albedo / normal / roughness).
+ * Tuned toward polyurethane cushion foam: warm tan, visible pores, dead matte.
+ */
+
+export type FoamMaps = {
   albedo: HTMLCanvasElement;
-  bump: HTMLCanvasElement;
-} {
+  normal: HTMLCanvasElement;
+  roughness: HTMLCanvasElement;
+  height: Float32Array;
+  size: number;
+};
+
+export function createFoamTextures(size = 1024): FoamMaps {
+  const height = new Float32Array(size * size);
+
+  // Build cellular pore height field (Worley + FBM).
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const v = y / size;
+
+      // Primary open cells.
+      const cell = worley(u * 42, v * 42);
+      // Secondary finer cells.
+      const fine = worley(u * 90 + 17, v * 90 + 9);
+      // Soft density variation across the foam block.
+      const macro = fbm(u * 6, v * 6);
+
+      // Open-cell look: deep round pits, raised thin walls.
+      const pit = Math.pow(cell, 1.55);
+      const micro = Math.pow(fine, 1.8);
+      let h = 0.55 + macro * 0.12;
+      h -= pit * 0.55;
+      h -= micro * 0.18;
+      // Slight wall ridges between cells.
+      h += (1 - cell) * (1 - cell) * 0.08;
+
+      height[y * size + x] = clamp01(h);
+    }
+  }
+
   const albedo = document.createElement("canvas");
   albedo.width = size;
   albedo.height = size;
-  const ctx = albedo.getContext("2d")!;
+  const actx = albedo.getContext("2d")!;
+  const aImg = actx.createImageData(size, size);
 
-  // Upholstery-foam base.
-  const base = ctx.createLinearGradient(0, 0, size, size);
-  base.addColorStop(0, "#efe4d4");
-  base.addColorStop(1, "#e2d3be");
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
+  const roughness = document.createElement("canvas");
+  roughness.width = size;
+  roughness.height = size;
+  const rctx = roughness.getContext("2d")!;
+  const rImg = rctx.createImageData(size, size);
 
-  const img = ctx.getImageData(0, 0, size, size);
-  const data = img.data;
-  const bumpPixels = new Uint8ClampedArray(size * size * 4);
+  // Warm polyurethane foam palette (from reference).
+  const baseR = 214;
+  const baseG = 186;
+  const baseB = 140;
+  const poreR = 150;
+  const poreG = 118;
+  const poreB = 78;
+  const wallR = 232;
+  const wallG = 208;
+  const wallB = 168;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
-      // Low-contrast cell noise — reads as pores, not cracks.
-      const a = fbm(x * 0.045, y * 0.045);
-      const b = fbm(x * 0.11 + 8, y * 0.11 + 3);
-      const pore = a * 0.65 + b * 0.35;
+      const h = height[y * size + x];
+      const cell = worley((x / size) * 42, (y / size) * 42);
+      const grain = hash2(x * 0.37, y * 0.41);
 
-      const shade = (pore - 0.5) * 16;
-      data[i] = clamp(236 + shade);
-      data[i + 1] = clamp(226 + shade * 0.92);
-      data[i + 2] = clamp(208 + shade * 0.7);
-      data[i + 3] = 255;
+      // Deep pores darken; thin walls stay lighter.
+      const poreMix = THREE_Math_smoothstep(0.35, 0.75, 1 - h);
+      const wallMix = THREE_Math_smoothstep(0.55, 0.95, h) * (1 - cell);
 
-      const h = clamp(155 + pore * 55);
-      bumpPixels[i] = h;
-      bumpPixels[i + 1] = h;
-      bumpPixels[i + 2] = h;
-      bumpPixels[i + 3] = 255;
+      let r = lerp(baseR, poreR, poreMix);
+      let g = lerp(baseG, poreG, poreMix);
+      let b = lerp(baseB, poreB, poreMix);
+      r = lerp(r, wallR, wallMix * 0.55);
+      g = lerp(g, wallG, wallMix * 0.55);
+      b = lerp(b, wallB, wallMix * 0.55);
+
+      // Fine sponge grain.
+      const gAmt = (grain - 0.5) * 14;
+      r = clamp(r + gAmt);
+      g = clamp(g + gAmt * 0.9);
+      b = clamp(b + gAmt * 0.7);
+
+      aImg.data[i] = r;
+      aImg.data[i + 1] = g;
+      aImg.data[i + 2] = b;
+      aImg.data[i + 3] = 255;
+
+      // Pores a bit glossier-dark; walls chalk-matte.
+      const rough = clamp(210 + h * 35 - poreMix * 25);
+      rImg.data[i] = rough;
+      rImg.data[i + 1] = rough;
+      rImg.data[i + 2] = rough;
+      rImg.data[i + 3] = 255;
     }
   }
-  ctx.putImageData(img, 0, 0);
 
-  // Soft cell pits.
-  for (let k = 0; k < 700; k++) {
-    const px = Math.random() * size;
-    const py = Math.random() * size;
-    const r = 1.4 + Math.random() * 4;
-    const g = ctx.createRadialGradient(px, py, 0, px, py, r);
-    g.addColorStop(0, "rgba(120, 100, 78, 0.1)");
-    g.addColorStop(1, "rgba(120, 100, 78, 0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fill();
+  actx.putImageData(aImg, 0, 0);
+  rctx.putImageData(rImg, 0, 0);
+
+  const normal = heightToNormalCanvas(height, size, 6.5);
+
+  return { albedo, normal, roughness, height, size };
+}
+
+/** Optional: bake micro pore relief into mesh normals via slight position jitter. */
+export function applyFoamMicroRelief(
+  positions: THREE.BufferAttribute,
+  normals: THREE.BufferAttribute,
+  amount = 0.012,
+) {
+  const v = { x: 0, y: 0, z: 0 };
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const y = positions.getY(i);
+    const z = positions.getZ(i);
+    const nx = normals.getX(i);
+    const ny = normals.getY(i);
+    const nz = normals.getZ(i);
+    // Stable 3D pore field so relief doesn't crawl when sculpting UVs.
+    const n =
+      worley3(x * 9.5, y * 9.5, z * 9.5) * 0.65 +
+      worley3(x * 22 + 4, y * 22, z * 22 + 2) * 0.35;
+    const displace = (0.55 - n) * amount;
+    positions.setXYZ(i, x + nx * displace, y + ny * displace, z + nz * displace);
+  }
+  positions.needsUpdate = true;
+}
+
+function heightToNormalCanvas(
+  height: Float32Array,
+  size: number,
+  strength: number,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const img = ctx.createImageData(size, size);
+
+  const at = (x: number, y: number) => {
+    const xx = ((x % size) + size) % size;
+    const yy = ((y % size) + size) % size;
+    return height[yy * size + xx];
+  };
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      // OpenGL-style normal map.
+      let nx = -dx;
+      let ny = -dy;
+      let nz = 1;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      nx /= len;
+      ny /= len;
+      nz /= len;
+
+      const i = (y * size + x) * 4;
+      img.data[i] = clamp((nx * 0.5 + 0.5) * 255);
+      img.data[i + 1] = clamp((ny * 0.5 + 0.5) * 255);
+      img.data[i + 2] = clamp((nz * 0.5 + 0.5) * 255);
+      img.data[i + 3] = 255;
+    }
   }
 
-  const bump = document.createElement("canvas");
-  bump.width = size;
-  bump.height = size;
-  const bctx = bump.getContext("2d")!;
-  bctx.putImageData(new ImageData(bumpPixels, size, size), 0, 0);
-  bctx.filter = "blur(0.6px)";
-  bctx.drawImage(bump, 0, 0);
-
-  return { albedo, bump };
+  ctx.putImageData(img, 0, 0);
+  return canvas;
 }
+
+// --- noise helpers ---
 
 function hash2(x: number, y: number) {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function hash3(x: number, y: number, z: number) {
+  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
   return s - Math.floor(s);
 }
 
@@ -90,7 +205,7 @@ function fbm(x: number, y: number) {
   let v = 0;
   let a = 0.5;
   let f = 1;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     v += a * valueNoise(x * f, y * f);
     a *= 0.5;
     f *= 2;
@@ -98,6 +213,59 @@ function fbm(x: number, y: number) {
   return v;
 }
 
+/** Worley / cellular — distance to nearest feature point. */
+function worley(x: number, y: number) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  let minD = 1;
+  for (let oy = -1; oy <= 1; oy++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      const cx = xi + ox;
+      const cy = yi + oy;
+      const fx = cx + hash2(cx * 1.1, cy * 2.3);
+      const fy = cy + hash2(cx * 3.7, cy * 1.9);
+      const d = Math.hypot(fx - x, fy - y);
+      if (d < minD) minD = d;
+    }
+  }
+  return clamp01(minD);
+}
+
+function worley3(x: number, y: number, z: number) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const zi = Math.floor(z);
+  let minD = 1;
+  for (let oz = -1; oz <= 1; oz++) {
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const cx = xi + ox;
+        const cy = yi + oy;
+        const cz = zi + oz;
+        const fx = cx + hash3(cx, cy, cz);
+        const fy = cy + hash3(cx + 19, cy + 3, cz + 7);
+        const fz = cz + hash3(cx + 5, cy + 11, cz + 23);
+        const d = Math.hypot(fx - x, fy - y, fz - z);
+        if (d < minD) minD = d;
+      }
+    }
+  }
+  return clamp01(minD);
+}
+
+function THREE_Math_smoothstep(min: number, max: number, x: number) {
+  const t = clamp01((x - min) / (max - min));
+  return t * t * (3 - 2 * t);
+}
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
 function clamp(v: number) {
   return Math.max(0, Math.min(255, v | 0));
+}
+
+function clamp01(v: number) {
+  return Math.max(0, Math.min(1, v));
 }

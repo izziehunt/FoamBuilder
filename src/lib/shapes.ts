@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { applyFoamMicroRelief } from "@/lib/foamTexture";
 import type { StarterShape } from "@/lib/types";
 
 function smoothStep(edge0: number, edge1: number, x: number) {
@@ -106,6 +107,13 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   }
   geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 
+  geo.computeVertexNormals();
+  // Bake subtle open-cell relief into the mesh itself.
+  applyFoamMicroRelief(
+    geo.getAttribute("position") as THREE.BufferAttribute,
+    geo.getAttribute("normal") as THREE.BufferAttribute,
+    0.014,
+  );
   geo.computeVertexNormals();
   geo.computeBoundingSphere();
   return geo;
