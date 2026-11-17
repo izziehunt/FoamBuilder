@@ -21,7 +21,7 @@ const modes: { id: SculptMode; label: string; hint: string }[] = [
 ];
 
 const shapes: { id: StarterShape; label: string }[] = [
-  { id: "blank", label: "Foam slab" },
+  { id: "blank", label: "Beauty blender" },
   { id: "face", label: "Face hint" },
   { id: "figure", label: "Body hint" },
 ];

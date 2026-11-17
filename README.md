@@ -3,10 +3,10 @@
 Sculpt soft foam into faces and figures in the browser.
 
 **v1 (sculpt-first)**
-- Start with a vertical **foam slab**
+- Start with a **beauty blender** sponge
 - Hold + drag **Cinch** to fold it into bodies
 - **Inflate** to bloat volume
-- Optional light **face** / **body** hints on the same slab
+- Optional light **face** / **body** hints
 
 ## Develop
 
