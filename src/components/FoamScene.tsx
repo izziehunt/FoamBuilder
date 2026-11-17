@@ -6,9 +6,31 @@ import {
   Environment,
   OrbitControls,
 } from "@react-three/drei";
-import { Suspense } from "react";
+import { Suspense, useLayoutEffect, useRef } from "react";
+import type { Group } from "three";
 import { FoamMesh } from "./FoamMesh";
 import type { SculptMode, StarterShape } from "@/lib/types";
+
+/** Contact shadow plane must not eat pointer hits on the sponge bottom. */
+function StudioShadows() {
+  const ref = useRef<Group>(null);
+  useLayoutEffect(() => {
+    ref.current?.traverse((obj) => {
+      obj.raycast = () => {};
+    });
+  }, []);
+  return (
+    <ContactShadows
+      ref={ref}
+      position={[0, -0.95, 0]}
+      opacity={0.3}
+      scale={10}
+      blur={3.4}
+      far={4}
+      color="#8a847c"
+    />
+  );
+}
 
 type FoamSceneProps = {
   mode: SculptMode;
@@ -67,14 +89,7 @@ export function FoamScene({
         brushRadius={brushRadius}
         brushStrength={brushStrength}
       />
-      <ContactShadows
-        position={[0, -0.92, 0]}
-        opacity={0.3}
-        scale={10}
-        blur={3.4}
-        far={4}
-        color="#8a847c"
-      />
+      <StudioShadows />
       <Suspense fallback={null}>
         <Environment preset="studio" environmentIntensity={0.28} />
       </Suspense>

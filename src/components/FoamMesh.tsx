@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { ThreeEvent, useFrame, useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { createStarterGeometry } from "@/lib/shapes";
 import {
@@ -37,6 +37,8 @@ export function FoamMesh({
   const raycaster = useRef(new THREE.Raycaster());
   const pointerNdc = useRef(new THREE.Vector2());
   const lastSculptMs = useRef(0);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   const { camera, gl } = useThree();
 
@@ -72,10 +74,11 @@ export function FoamMesh({
   const sculptAtPointer = useCallback(
     (clientX: number, clientY: number, isDrag: boolean) => {
       const mesh = meshRef.current;
-      if (!mesh || mode === "orbit") return;
+      const currentMode = modeRef.current;
+      if (!mesh || currentMode === "orbit") return false;
 
       const now = performance.now();
-      if (isDrag && now - lastSculptMs.current < 24) return;
+      if (isDrag && now - lastSculptMs.current < 24) return true;
       lastSculptMs.current = now;
 
       const rect = gl.domElement.getBoundingClientRect();
@@ -84,7 +87,7 @@ export function FoamMesh({
 
       raycaster.current.setFromCamera(pointerNdc.current, camera);
       const hits = raycaster.current.intersectObject(mesh, false);
-      if (!hits.length) return;
+      if (!hits.length) return false;
 
       worldHit.current.copy(hits[0].point);
       invMatrix.current.copy(mesh.matrixWorld).invert();
@@ -93,7 +96,7 @@ export function FoamMesh({
       const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
       const nrm = mesh.geometry.getAttribute("normal") as THREE.BufferAttribute;
 
-      if (mode === "cinch") {
+      if (currentMode === "cinch") {
         dragLocal.current.copy(
           isDrag
             ? hitLocal.current.clone().sub(lastHit.current)
@@ -108,7 +111,7 @@ export function FoamMesh({
           brushStrength,
           adjacency,
         );
-      } else if (mode === "inflate") {
+      } else if (currentMode === "inflate") {
         applyInflate(
           pos,
           nrm,
@@ -121,6 +124,7 @@ export function FoamMesh({
 
       lastHit.current.copy(hitLocal.current);
       recomputeNormals();
+      return true;
     },
     [
       adjacency,
@@ -128,34 +132,50 @@ export function FoamMesh({
       brushStrength,
       camera,
       gl.domElement,
-      mode,
       recomputeNormals,
     ],
   );
 
-  const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
-    if (mode === "orbit") return;
-    e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    sculpting.current = true;
-    lastSculptMs.current = 0;
-    sculptAtPointer(e.clientX, e.clientY, false);
-  };
+  // Canvas-level pointers so the contact-shadow plane can't steal bottom hits,
+  // and leaving the mesh mid-stroke doesn't cancel cinch/inflate.
+  useEffect(() => {
+    const el = gl.domElement;
 
-  const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
-    if (!sculpting.current || mode === "orbit") return;
-    e.stopPropagation();
-    sculptAtPointer(e.clientX, e.clientY, true);
-  };
+    const onDown = (e: PointerEvent) => {
+      if (modeRef.current === "orbit" || e.button !== 0) return;
+      lastSculptMs.current = 0;
+      const hit = sculptAtPointer(e.clientX, e.clientY, false);
+      if (!hit) return;
+      sculpting.current = true;
+      el.setPointerCapture(e.pointerId);
+    };
 
-  const onPointerUp = (e: ThreeEvent<PointerEvent>) => {
-    sculpting.current = false;
-    try {
-      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-  };
+    const onMove = (e: PointerEvent) => {
+      if (!sculpting.current || modeRef.current === "orbit") return;
+      sculptAtPointer(e.clientX, e.clientY, true);
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (!sculpting.current) return;
+      sculpting.current = false;
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+    };
+  }, [gl.domElement, sculptAtPointer]);
 
   useFrame((_, dt) => {
     const mesh = meshRef.current;
@@ -180,12 +200,13 @@ export function FoamMesh({
       material={material}
       castShadow
       receiveShadow
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerLeave={onPointerUp}
     >
-      <mesh ref={ringRef} visible={false} renderOrder={10}>
+      <mesh
+        ref={ringRef}
+        visible={false}
+        renderOrder={10}
+        raycast={() => null}
+      >
         <ringGeometry args={[0.92, 1, 48]} />
         <meshBasicMaterial
           color="#5c4a3a"
