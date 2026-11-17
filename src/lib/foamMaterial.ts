@@ -23,7 +23,7 @@ export function createFoamMaterial(): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     map,
     normalMap,
-    normalScale: new THREE.Vector2(0.35, 0.35),
+    normalScale: new THREE.Vector2(0.22, 0.22),
     roughnessMap,
     color: new THREE.Color("#f3e6c8"),
     roughness: 0.98,

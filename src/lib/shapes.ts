@@ -14,38 +14,32 @@ function softBlob(
 }
 
 /**
- * Single smooth pear curve — round near the bottom, continuous taper, soft tip.
- * No keyframes (those caused the horizontal ridges).
- */
-function blenderRadius(u: number) {
-  const t = THREE.MathUtils.clamp(u, 0, 1);
-  // Classic smooth pear/teardrop of revolution.
-  // sqrt-ish start ⇒ round bottom; (1-t)^p ⇒ gentle upper taper.
-  const belly = Math.pow(t, 0.52) * Math.pow(1 - t, 0.78);
-  const tip = 0.036 * Math.pow(t, 2.8); // softly blunt tip, never needle-sharp
-  return 1.62 * belly + tip;
-}
-
-/**
- * Makeup beauty blender — lathed from a smooth 2D silhouette (no bumpy rings).
+ * Makeup beauty blender — lathed from one convex Bézier silhouette.
+ * Convex control points ⇒ no overshoot ⇒ no horizontal ridges.
  */
 export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
   const height = 1.7;
-  const segments = 96; // profile samples
-  const radial = 128; // smooth around
+  const segments = 128;
+  const radial = 160;
+
+  // (radius, height) — round bottom, full belly, soft tip. All y increasing.
+  const silhouette = new THREE.CubicBezierCurve(
+    new THREE.Vector2(0.0, 0.0),
+    new THREE.Vector2(1.18, 0.06),
+    new THREE.Vector2(0.92, 0.58),
+    new THREE.Vector2(0.05, 1.0),
+  );
 
   const profile: THREE.Vector2[] = [];
   for (let i = 0; i <= segments; i++) {
-    const u = i / segments;
-    profile.push(new THREE.Vector2(blenderRadius(u), u * height));
+    const p = silhouette.getPoint(i / segments);
+    profile.push(new THREE.Vector2(Math.max(p.x, 0), p.y * height));
   }
 
-  // Lathe = clean surface of revolution (indexed, smooth).
   let geo: THREE.BufferGeometry = new THREE.LatheGeometry(profile, radial);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
 
-  // Optional light face/body hints (keep subtle so the sponge stays blender-shaped).
   if (shape !== "blank") {
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
@@ -74,7 +68,6 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
     pos.needsUpdate = true;
   }
 
-  // Fit in frame.
   geo.computeBoundingBox();
   const box = geo.boundingBox!;
   const center = new THREE.Vector3();
@@ -91,7 +84,6 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   }
   pos.needsUpdate = true;
 
-  // Stable UVs for the foam texture.
   const uvs = new Float32Array(pos.count * 2);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
@@ -103,7 +95,6 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 
   geo.computeVertexNormals();
-  // No micro-displacement relief — that was adding extra bumpy noise.
   geo.computeBoundingSphere();
   return geo;
 }
