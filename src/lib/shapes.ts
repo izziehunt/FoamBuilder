@@ -15,8 +15,8 @@ function softBlob(
 }
 
 /**
- * Makeup beauty blender sponge — dense, weld-safe sphere morph.
- * Round bulb bottom + softly rounded tip (not needle-sharp).
+ * Makeup beauty blender — continuous teardrop of revolution
+ * (round hemispherical bottom → smooth taper → softly blunt tip).
  */
 export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
   // High-res sphere → blender (already indexed, no face-crack issues).
@@ -25,46 +25,31 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   const v = new THREE.Vector3();
   const out = new THREE.Vector3();
 
-  // Bottom = big sphere cap (fully round). Tip = small sphere cap (softly blunt).
-  const bulbR = 0.56;
-  const bulbCy = -0.22;
-  const tipR = 0.11;
-  const tipCy = 0.72;
-  const yMin = bulbCy - bulbR; // south pole of the bulb
-  const yMax = tipCy + tipR; // north pole of the tip cap
-  const joinY = bulbCy + bulbR * 0.42; // where the taper leaves the bulb
-
-  const rAtJoin = Math.sqrt(
-    Math.max(0, bulbR * bulbR - (joinY - bulbCy) * (joinY - bulbCy)),
-  );
-  // Meet the tip sphere a little below its equator for a smooth handoff.
-  const tipJoinY = tipCy - tipR * 0.15;
-  const rAtTipJoin = Math.sqrt(
-    Math.max(0, tipR * tipR - (tipJoinY - tipCy) * (tipJoinY - tipCy)),
-  );
+  const bulbR = 0.52;
+  const taperLen = 1.05;
+  const tipR = 0.045; // tiny blunt tip — not a second bulb
 
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const lat = THREE.MathUtils.clamp(v.y, -1, 1);
     const xz = Math.hypot(v.x, v.z);
+    // 0 at bottom pole → 1 at tip
+    const t = (lat + 1) * 0.5;
 
-    // Map sphere latitude → blender height.
-    const Y = THREE.MathUtils.lerp(yMin, yMax, (lat + 1) * 0.5);
-
+    let Y: number;
     let R: number;
-    if (Y <= joinY) {
-      // Fully round bottom bulb (circular silhouette).
-      const dy = Y - bulbCy;
-      R = Math.sqrt(Math.max(0, bulbR * bulbR - dy * dy));
-    } else if (Y >= tipJoinY) {
-      // Softly rounded tip cap.
-      const dy = Y - tipCy;
-      R = Math.sqrt(Math.max(0, tipR * tipR - dy * dy));
+
+    if (t <= 0.5) {
+      // Lower half of the mesh → full round hemisphere bottom.
+      const a = (t / 0.5) * (Math.PI * 0.5); // 0 at south pole → π/2 at equator
+      Y = bulbR - bulbR * Math.cos(a);
+      R = bulbR * Math.sin(a);
     } else {
-      // Smooth taper between bulb and tip.
-      const u = (Y - joinY) / (tipJoinY - joinY);
-      const s = u * u * (3 - 2 * u);
-      R = THREE.MathUtils.lerp(rAtJoin, rAtTipJoin, s);
+      // Upper half → continuous taper to a softly blunt tip (no neck/bulb).
+      const u = (t - 0.5) / 0.5; // 0 at equator → 1 at tip
+      Y = bulbR + u * taperLen;
+      // Power taper reads like the real sponge; floor keeps the tip soft.
+      R = THREE.MathUtils.lerp(bulbR, tipR, Math.pow(u, 1.12));
     }
 
     if (xz < 1e-6) {
