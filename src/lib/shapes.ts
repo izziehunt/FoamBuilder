@@ -148,7 +148,7 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   // (Safer than custom triplanar GLSL, which was making the mesh vanish.)
   const nrm = geo.getAttribute("normal") as THREE.BufferAttribute;
   const uvs = new Float32Array(pos.count * 2);
-  const scale = 1.15;
+  const uvScale = 1.15;
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
     const nx = Math.abs(nrm.getX(i));
@@ -158,16 +158,16 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
     let vv: number;
     if (nz >= nx && nz >= ny) {
       // Front / back
-      u = v.x * scale;
-      vv = v.y * scale;
+      u = v.x * uvScale;
+      vv = v.y * uvScale;
     } else if (nx >= ny) {
       // Left / right sides
-      u = v.z * scale;
-      vv = v.y * scale;
+      u = v.z * uvScale;
+      vv = v.y * uvScale;
     } else {
       // Top / bottom
-      u = v.x * scale;
-      vv = v.z * scale;
+      u = v.x * uvScale;
+      vv = v.z * uvScale;
     }
     uvs[i * 2] = u + 0.5;
     uvs[i * 2 + 1] = vv + 0.5;
