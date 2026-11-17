@@ -1,7 +1,7 @@
 import type { BufferAttribute } from "three";
 
 /**
- * Procedural beauty-blender foam maps — fine latex pores, soft matte nude.
+ * Procedural beauty-blender foam — fine open latex pores, soft matte nude.
  */
 
 export type FoamMaps = {
@@ -15,27 +15,27 @@ export type FoamMaps = {
 export function createFoamTextures(size = 1024): FoamMaps {
   const height = new Float32Array(size * size);
 
-  // Dense, fine open cells like latex makeup sponge (not coarse upholstery foam).
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const u = x / size;
       const v = y / size;
 
-      const cell = worley(u * 96, v * 96);
-      const fine = worley(u * 210 + 17, v * 210 + 9);
-      const soft = worley(u * 48 + 3, v * 48 + 11);
-      const macro = fbm(u * 3.5, v * 3.5);
+      // Multi-scale open cells like makeup sponge foam.
+      const cell = worley(u * 72, v * 72);
+      const mid = worley(u * 128 + 5, v * 128 + 2);
+      const fine = worley(u * 200 + 17, v * 200 + 9);
+      const macro = fbm(u * 4, v * 4);
 
-      // Shallow rounded pits — velvety, not cracked walls.
-      const pit = Math.pow(cell, 1.15);
-      const micro = Math.pow(fine, 1.45);
-      const mid = Math.pow(soft, 1.25);
-      let h = 0.72 + macro * 0.045;
-      h -= pit * 0.22;
-      h -= mid * 0.08;
-      h -= micro * 0.07;
-      // Soft pore lips instead of sharp voronoi ridges.
-      h += Math.pow(1 - cell, 2.2) * 0.03;
+      const pit = Math.pow(cell, 1.05);
+      const midPit = Math.pow(mid, 1.2);
+      const micro = Math.pow(fine, 1.35);
+
+      // Clear pore bowls with soft lips (readable sponge, not plastic).
+      let h = 0.78 + macro * 0.06;
+      h -= pit * 0.42;
+      h -= midPit * 0.16;
+      h -= micro * 0.1;
+      h += Math.pow(Math.max(0, 0.55 - cell), 2) * 0.08;
 
       height[y * size + x] = clamp01(h);
     }
@@ -53,14 +53,14 @@ export function createFoamTextures(size = 1024): FoamMaps {
   const rctx = roughness.getContext("2d")!;
   const rImg = rctx.createImageData(size, size);
 
-  // Classic beauty-blender nude — soft peachy cream latex.
-  const baseR = 242;
-  const baseG = 214;
-  const baseB = 196;
-  const poreR = 220;
-  const poreG = 178;
-  const poreB = 158;
-  const wallR = 248;
+  // Classic nude beauty-blender latex.
+  const baseR = 244;
+  const baseG = 208;
+  const baseB = 190;
+  const poreR = 198;
+  const poreG = 148;
+  const poreB = 132;
+  const wallR = 252;
   const wallG = 226;
   const wallB = 210;
 
@@ -68,11 +68,11 @@ export function createFoamTextures(size = 1024): FoamMaps {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       const h = height[y * size + x];
-      const cell = worley((x / size) * 96, (y / size) * 96);
+      const cell = worley((x / size) * 72, (y / size) * 72);
       const grain = hash2(x * 0.37, y * 0.41);
 
-      const poreMix = THREE_Math_smoothstep(0.48, 0.88, 1 - h) * 0.55;
-      const wallMix = THREE_Math_smoothstep(0.7, 0.98, h) * (1 - cell) * 0.22;
+      const poreMix = THREE_Math_smoothstep(0.35, 0.85, 1 - h) * 0.85;
+      const wallMix = THREE_Math_smoothstep(0.62, 0.96, h) * (1 - cell) * 0.4;
 
       let r = lerp(baseR, poreR, poreMix);
       let g = lerp(baseG, poreG, poreMix);
@@ -81,19 +81,17 @@ export function createFoamTextures(size = 1024): FoamMaps {
       g = lerp(g, wallG, wallMix);
       b = lerp(b, wallB, wallMix);
 
-      // Fine latex grain — very low contrast.
-      const gAmt = (grain - 0.5) * 5.5;
+      const gAmt = (grain - 0.5) * 7;
       r = clamp(r + gAmt);
       g = clamp(g + gAmt * 0.9);
-      b = clamp(b + gAmt * 0.82);
+      b = clamp(b + gAmt * 0.8);
 
       aImg.data[i] = r;
       aImg.data[i + 1] = g;
       aImg.data[i + 2] = b;
       aImg.data[i + 3] = 255;
 
-      // Evenly matte sponge; pores only a touch smoother.
-      const rough = clamp(238 + h * 12 - poreMix * 8);
+      const rough = clamp(230 + h * 18 - poreMix * 14);
       rImg.data[i] = rough;
       rImg.data[i + 1] = rough;
       rImg.data[i + 2] = rough;
@@ -104,13 +102,11 @@ export function createFoamTextures(size = 1024): FoamMaps {
   actx.putImageData(aImg, 0, 0);
   rctx.putImageData(rImg, 0, 0);
 
-  // Gentle normals so pores read soft, not cracked.
-  const normal = heightToNormalCanvas(height, size, 2.4);
+  const normal = heightToNormalCanvas(height, size, 3.6);
 
   return { albedo, normal, roughness, height, size };
 }
 
-/** Optional: bake micro pore relief into mesh normals via slight position jitter. */
 export function applyFoamMicroRelief(
   positions: BufferAttribute,
   normals: BufferAttribute,
@@ -172,8 +168,6 @@ function heightToNormalCanvas(
   ctx.putImageData(img, 0, 0);
   return canvas;
 }
-
-// --- noise helpers ---
 
 function hash2(x: number, y: number) {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;

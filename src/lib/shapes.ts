@@ -14,44 +14,80 @@ function softBlob(
 }
 
 /**
- * Makeup beauty blender — lathed from one convex Bézier silhouette.
- * Convex control points ⇒ no overshoot ⇒ no horizontal ridges.
+ * Weld by position only so Lathe seam verts share one vertex.
+ * (mergeVertices keeps UV seams open → sculpt tears the mesh.)
+ */
+function weldByPosition(
+  geometry: THREE.BufferGeometry,
+  tolerance = 1e-4,
+): THREE.BufferGeometry {
+  const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const index = geometry.getIndex();
+  const inv = 1 / tolerance;
+  const keyToNew = new Map<string, number>();
+  const newPos: number[] = [];
+  const remap = new Int32Array(pos.count);
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const key = `${Math.round(x * inv)},${Math.round(y * inv)},${Math.round(z * inv)}`;
+    let ni = keyToNew.get(key);
+    if (ni === undefined) {
+      ni = newPos.length / 3;
+      keyToNew.set(key, ni);
+      newPos.push(x, y, z);
+    }
+    remap[i] = ni;
+  }
+
+  const newIndex: number[] = [];
+  if (index) {
+    for (let i = 0; i < index.count; i++) {
+      newIndex.push(remap[index.getX(i)]);
+    }
+  } else {
+    for (let i = 0; i < pos.count; i++) {
+      newIndex.push(remap[i]);
+    }
+  }
+
+  const welded = new THREE.BufferGeometry();
+  welded.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(newPos, 3),
+  );
+  welded.setIndex(newIndex);
+  geometry.dispose();
+  return welded;
+}
+
+/**
+ * Makeup beauty blender — one continuous lathed silhouette, welded for sculpt.
  */
 export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
   const height = 1.7;
   const segments = 128;
-  const radial = 160;
+  const radial = 96;
 
-  // Body: round bottom → slim belly → taper into the tip. Tip closed with a
-  // circular cap so it reads sharp but softly rounded (not a flat cut).
-  const body = new THREE.CubicBezierCurve(
+  // Single convex Bézier: round bottom → belly → cohesive soft tip (no separate cap).
+  const silhouette = new THREE.CubicBezierCurve(
     new THREE.Vector2(0.0, 0.0),
     new THREE.Vector2(1.08, 0.06),
-    new THREE.Vector2(0.66, 0.52),
-    new THREE.Vector2(0.085, 0.9),
+    new THREE.Vector2(0.5, 0.68),
+    new THREE.Vector2(0.0, 1.0),
   );
 
-  const bodySegs = Math.floor(segments * 0.88);
-  const tipSegs = segments - bodySegs;
   const profile: THREE.Vector2[] = [];
-  for (let i = 0; i <= bodySegs; i++) {
-    const p = body.getPoint(i / bodySegs);
+  for (let i = 0; i <= segments; i++) {
+    const p = silhouette.getPoint(i / segments);
     profile.push(new THREE.Vector2(Math.max(p.x, 0), p.y * height));
   }
 
-  const tipR = profile[profile.length - 1].x;
-  const tipY = profile[profile.length - 1].y;
-  for (let i = 1; i <= tipSegs; i++) {
-    const a = (i / tipSegs) * (Math.PI / 2);
-    profile.push(
-      new THREE.Vector2(
-        Math.max(tipR * Math.cos(a), 0),
-        tipY + tipR * Math.sin(a),
-      ),
-    );
-  }
-
   let geo: THREE.BufferGeometry = new THREE.LatheGeometry(profile, radial);
+  geo = weldByPosition(geo, 1e-4);
+
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
 
@@ -99,6 +135,7 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   }
   pos.needsUpdate = true;
 
+  // Spherical UVs after weld (avoid lathe UV seam fighting the weld).
   const uvs = new Float32Array(pos.count * 2);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);

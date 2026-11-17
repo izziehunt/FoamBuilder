@@ -7,32 +7,32 @@ export function createFoamMaterial(): THREE.MeshPhysicalMaterial {
 
   const map = new THREE.CanvasTexture(maps.albedo);
   map.wrapS = map.wrapT = THREE.RepeatWrapping;
-  map.repeat.set(5.5, 5.5);
+  map.repeat.set(4.2, 4.2);
   map.colorSpace = THREE.SRGBColorSpace;
   map.anisotropy = 8;
 
   const normalMap = new THREE.CanvasTexture(maps.normal);
   normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-  normalMap.repeat.set(5.5, 5.5);
+  normalMap.repeat.set(4.2, 4.2);
   normalMap.anisotropy = 8;
 
   const roughnessMap = new THREE.CanvasTexture(maps.roughness);
   roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
-  roughnessMap.repeat.set(5.5, 5.5);
+  roughnessMap.repeat.set(4.2, 4.2);
 
   return new THREE.MeshPhysicalMaterial({
     map,
     normalMap,
-    normalScale: new THREE.Vector2(0.28, 0.28),
+    normalScale: new THREE.Vector2(0.55, 0.55),
     roughnessMap,
-    color: new THREE.Color("#f4d7c8"),
-    roughness: 0.92,
+    color: new THREE.Color("#f2d2c4"),
+    roughness: 0.96,
     metalness: 0,
-    sheen: 0.28,
-    sheenRoughness: 0.85,
-    sheenColor: new THREE.Color("#f7ddd0"),
+    sheen: 0.22,
+    sheenRoughness: 0.95,
+    sheenColor: new THREE.Color("#f6dcd0"),
     clearcoat: 0,
-    envMapIntensity: 0.12,
+    envMapIntensity: 0.1,
     flatShading: false,
   });
 }
