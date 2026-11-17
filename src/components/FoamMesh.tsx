@@ -9,7 +9,7 @@ import {
   applyInflate,
   buildAdjacency,
 } from "@/lib/sculpt";
-import { createFoamTextures } from "@/lib/foamTexture";
+import { createFoamMaterial } from "@/lib/foamMaterial";
 import type { SculptMode, StarterShape } from "@/lib/types";
 
 type FoamMeshProps = {
@@ -48,62 +48,7 @@ export function FoamMesh({
 
   const adjacency = useMemo(() => buildAdjacency(geometry), [geometry]);
 
-  const material = useMemo(() => {
-    const maps = createFoamTextures(1024);
-    const repeat = new THREE.Vector2(5.5, 5.5);
-
-    const map = new THREE.CanvasTexture(maps.albedo);
-    map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    map.repeat.copy(repeat);
-    map.colorSpace = THREE.SRGBColorSpace;
-    map.anisotropy = 8;
-
-    const normalMap = new THREE.CanvasTexture(maps.normal);
-    normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    normalMap.repeat.copy(repeat);
-    normalMap.anisotropy = 8;
-
-    const roughnessMap = new THREE.CanvasTexture(maps.roughness);
-    roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
-    roughnessMap.repeat.copy(repeat);
-
-    const mat = new THREE.MeshPhysicalMaterial({
-      map,
-      normalMap,
-      normalScale: new THREE.Vector2(0.75, 0.75),
-      roughnessMap,
-      // Pale foam tint — multiply with albedo toward the photo.
-      color: new THREE.Color("#f3e6c8"),
-      roughness: 0.98,
-      metalness: 0,
-      // Hint of soft subsurface so thick foam doesn’t look plastic.
-      sheen: 0.18,
-      sheenRoughness: 1,
-      sheenColor: new THREE.Color("#f0dfb8"),
-      clearcoat: 0,
-      envMapIntensity: 0.15,
-      flatShading: false,
-    });
-
-    // Gentle pore cavity shading — keep it light like the reference.
-    mat.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <map_fragment>",
-        /* glsl */ `
-        #include <map_fragment>
-        float poreLuma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-        diffuseColor.rgb = mix(
-          diffuseColor.rgb * 0.9,
-          diffuseColor.rgb,
-          smoothstep(0.42, 0.7, poreLuma)
-        );
-        `,
-      );
-    };
-    mat.customProgramCacheKey = () => "foam-photo-match-v1";
-
-    return mat;
-  }, []);
+  const material = useMemo(() => createFoamMaterial(), []);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(
