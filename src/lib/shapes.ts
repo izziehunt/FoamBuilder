@@ -75,7 +75,7 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   const size = new THREE.Vector3();
   box.getSize(size);
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const fit = 1.65 / maxDim;
+  const fit = 1.32 / maxDim;
 
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
