@@ -15,34 +15,57 @@ function softBlob(
 }
 
 /**
- * Beauty-blender radius profile along Y (−1 bottom → +1 tip).
- * Closed teardrop of revolution: fat belly, soft pointy tip.
- */
-function blenderRadius(y: number) {
-  const t = THREE.MathUtils.clamp((y + 1) * 0.5, 0, 1); // 0 at bottom, 1 at tip
-  // Peak width a bit below the middle — classic blender silhouette.
-  return Math.sin(Math.PI * t) * (0.72 - 0.28 * t);
-}
-
-/**
  * Makeup beauty blender sponge — dense, weld-safe sphere morph.
+ * Round bulb bottom + softly rounded tip (not needle-sharp).
  */
 export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
-  // High-res sphere → teardrop (already indexed, no face-crack issues).
+  // High-res sphere → blender (already indexed, no face-crack issues).
   const geo = new THREE.SphereGeometry(1, 96, 128);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
   const out = new THREE.Vector3();
 
+  // Bottom = big sphere cap (fully round). Tip = small sphere cap (softly blunt).
+  const bulbR = 0.56;
+  const bulbCy = -0.22;
+  const tipR = 0.11;
+  const tipCy = 0.72;
+  const yMin = bulbCy - bulbR; // south pole of the bulb
+  const yMax = tipCy + tipR; // north pole of the tip cap
+  const joinY = bulbCy + bulbR * 0.42; // where the taper leaves the bulb
+
+  const rAtJoin = Math.sqrt(
+    Math.max(0, bulbR * bulbR - (joinY - bulbCy) * (joinY - bulbCy)),
+  );
+  // Meet the tip sphere a little below its equator for a smooth handoff.
+  const tipJoinY = tipCy - tipR * 0.15;
+  const rAtTipJoin = Math.sqrt(
+    Math.max(0, tipR * tipR - (tipJoinY - tipCy) * (tipJoinY - tipCy)),
+  );
+
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
-    // Sphere verts are on the unit sphere (or near poles).
-    const y = THREE.MathUtils.clamp(v.y, -1, 1);
+    const lat = THREE.MathUtils.clamp(v.y, -1, 1);
     const xz = Math.hypot(v.x, v.z);
 
-    // Slightly elongate the tip; keep the bulb rounder.
-    const Y = y >= 0 ? y * 1.12 : y * 0.92;
-    const R = blenderRadius(y);
+    // Map sphere latitude → blender height.
+    const Y = THREE.MathUtils.lerp(yMin, yMax, (lat + 1) * 0.5);
+
+    let R: number;
+    if (Y <= joinY) {
+      // Fully round bottom bulb (circular silhouette).
+      const dy = Y - bulbCy;
+      R = Math.sqrt(Math.max(0, bulbR * bulbR - dy * dy));
+    } else if (Y >= tipJoinY) {
+      // Softly rounded tip cap.
+      const dy = Y - tipCy;
+      R = Math.sqrt(Math.max(0, tipR * tipR - dy * dy));
+    } else {
+      // Smooth taper between bulb and tip.
+      const u = (Y - joinY) / (tipJoinY - joinY);
+      const s = u * u * (3 - 2 * u);
+      R = THREE.MathUtils.lerp(rAtJoin, rAtTipJoin, s);
+    }
 
     if (xz < 1e-6) {
       out.set(0, Y, 0);
