@@ -59,23 +59,24 @@ export function FoamScene({
       <directionalLight position={[-3.5, 3, -2]} intensity={0.4} color="#f5f2ec" />
       <directionalLight position={[0, 2, 4]} intensity={0.35} color="#ffffff" />
 
+      {/* Mesh renders immediately — don't block on HDR environment fetch. */}
+      <FoamMesh
+        mode={mode}
+        shape={shape}
+        shapeVersion={shapeVersion}
+        brushRadius={brushRadius}
+        brushStrength={brushStrength}
+      />
+      <ContactShadows
+        position={[0, -0.88, 0]}
+        opacity={0.32}
+        scale={10}
+        blur={3.4}
+        far={4}
+        color="#8a847c"
+      />
       <Suspense fallback={null}>
         <Environment preset="studio" environmentIntensity={0.28} />
-        <FoamMesh
-          mode={mode}
-          shape={shape}
-          shapeVersion={shapeVersion}
-          brushRadius={brushRadius}
-          brushStrength={brushStrength}
-        />
-        <ContactShadows
-          position={[0, -0.88, 0]}
-          opacity={0.32}
-          scale={10}
-          blur={3.4}
-          far={4}
-          color="#8a847c"
-        />
       </Suspense>
 
       <OrbitControls

@@ -136,15 +136,6 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   }
   pos.needsUpdate = true;
 
-  // Continuous planar UVs — no hard face switches that read as cracks in the normal map.
-  const uvs = new Float32Array(pos.count * 2);
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i);
-    uvs[i * 2] = v.x * 0.72 + 0.5;
-    uvs[i * 2 + 1] = v.y * 0.72 + 0.5;
-  }
-  geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-
   geo.computeVertexNormals();
   applyFoamMicroRelief(
     geo.getAttribute("position") as THREE.BufferAttribute,
@@ -152,6 +143,37 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
     0.008,
   );
   geo.computeVertexNormals();
+
+  // Per-face planar UVs from the dominant normal so sides aren't streaky.
+  // (Safer than custom triplanar GLSL, which was making the mesh vanish.)
+  const nrm = geo.getAttribute("normal") as THREE.BufferAttribute;
+  const uvs = new Float32Array(pos.count * 2);
+  const scale = 1.15;
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const nx = Math.abs(nrm.getX(i));
+    const ny = Math.abs(nrm.getY(i));
+    const nz = Math.abs(nrm.getZ(i));
+    let u: number;
+    let vv: number;
+    if (nz >= nx && nz >= ny) {
+      // Front / back
+      u = v.x * scale;
+      vv = v.y * scale;
+    } else if (nx >= ny) {
+      // Left / right sides
+      u = v.z * scale;
+      vv = v.y * scale;
+    } else {
+      // Top / bottom
+      u = v.x * scale;
+      vv = v.z * scale;
+    }
+    uvs[i * 2] = u + 0.5;
+    uvs[i * 2 + 1] = vv + 0.5;
+  }
+  geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+
   geo.computeBoundingSphere();
   return geo;
 }
