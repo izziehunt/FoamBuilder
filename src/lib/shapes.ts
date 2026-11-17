@@ -22,18 +22,33 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   const segments = 128;
   const radial = 160;
 
-  // (radius, height) — round bottom, full belly, soft tip. All y increasing.
-  const silhouette = new THREE.CubicBezierCurve(
+  // Body: round bottom → slim belly → taper into the tip. Tip closed with a
+  // circular cap so it reads sharp but softly rounded (not a flat cut).
+  const body = new THREE.CubicBezierCurve(
     new THREE.Vector2(0.0, 0.0),
     new THREE.Vector2(1.08, 0.06),
-    new THREE.Vector2(0.84, 0.58),
-    new THREE.Vector2(0.05, 1.0),
+    new THREE.Vector2(0.66, 0.52),
+    new THREE.Vector2(0.085, 0.9),
   );
 
+  const bodySegs = Math.floor(segments * 0.88);
+  const tipSegs = segments - bodySegs;
   const profile: THREE.Vector2[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const p = silhouette.getPoint(i / segments);
+  for (let i = 0; i <= bodySegs; i++) {
+    const p = body.getPoint(i / bodySegs);
     profile.push(new THREE.Vector2(Math.max(p.x, 0), p.y * height));
+  }
+
+  const tipR = profile[profile.length - 1].x;
+  const tipY = profile[profile.length - 1].y;
+  for (let i = 1; i <= tipSegs; i++) {
+    const a = (i / tipSegs) * (Math.PI / 2);
+    profile.push(
+      new THREE.Vector2(
+        Math.max(tipR * Math.cos(a), 0),
+        tipY + tipR * Math.sin(a),
+      ),
+    );
   }
 
   let geo: THREE.BufferGeometry = new THREE.LatheGeometry(profile, radial);
