@@ -25,8 +25,8 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   // (radius, height) — round bottom, full belly, soft tip. All y increasing.
   const silhouette = new THREE.CubicBezierCurve(
     new THREE.Vector2(0.0, 0.0),
-    new THREE.Vector2(1.18, 0.06),
-    new THREE.Vector2(0.92, 0.58),
+    new THREE.Vector2(1.08, 0.06),
+    new THREE.Vector2(0.84, 0.58),
     new THREE.Vector2(0.05, 1.0),
   );
 
