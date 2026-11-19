@@ -1,17 +1,4 @@
 import * as THREE from "three";
-import type { StarterShape } from "@/lib/types";
-
-function softBlob(
-  p: THREE.Vector3,
-  center: THREE.Vector3,
-  radius: number,
-  amount: number,
-) {
-  const d = p.distanceTo(center) / radius;
-  if (d >= 1) return 0;
-  const falloff = 1 - d * d * (3 - 2 * d);
-  return falloff * amount;
-}
 
 /**
  * Weld by position only so Lathe seam verts share one vertex.
@@ -66,13 +53,11 @@ function weldByPosition(
 /**
  * Makeup beauty blender — one continuous lathed silhouette, welded for sculpt.
  */
-export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
+export function createStarterGeometry(): THREE.BufferGeometry {
   const height = 1.7;
-  // Dense enough to stay smooth; lighter than 128×96 for brush perf.
   const segments = 96;
   const radial = 72;
 
-  // Single convex Bézier: round bottom → belly → cohesive soft tip (no separate cap).
   const silhouette = new THREE.CubicBezierCurve(
     new THREE.Vector2(0.0, 0.0),
     new THREE.Vector2(1.08, 0.06),
@@ -92,34 +77,6 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
 
-  if (shape !== "blank") {
-    for (let i = 0; i < pos.count; i++) {
-      v.fromBufferAttribute(pos, i);
-      if (shape === "face") {
-        let push = 0;
-        push += softBlob(v, new THREE.Vector3(0.2, 1.05, 0.3), 0.26, 0.04);
-        push += softBlob(v, new THREE.Vector3(-0.2, 1.05, 0.3), 0.26, 0.04);
-        push -= softBlob(v, new THREE.Vector3(0.12, 1.12, 0.36), 0.09, 0.018);
-        push -= softBlob(v, new THREE.Vector3(-0.12, 1.12, 0.36), 0.09, 0.018);
-        push += softBlob(v, new THREE.Vector3(0, 0.9, 0.38), 0.12, 0.022);
-        v.z += push;
-      } else {
-        const waist = softBlob(v, new THREE.Vector3(0, 0.85, 0), 0.42, 1);
-        v.x *= 1 - waist * 0.06;
-        v.z *= 1 - waist * 0.04;
-        const legs = softBlob(v, new THREE.Vector3(0, 0.25, 0.12), 0.38, 1);
-        if (Math.abs(v.x) < 0.12) {
-          v.z -= legs * 0.028;
-          v.x *= 1 + legs * 0.08;
-        }
-        const shoulders = softBlob(v, new THREE.Vector3(0, 1.15, 0), 0.38, 1);
-        v.x *= 1 + shoulders * 0.035;
-      }
-      pos.setXYZ(i, v.x, v.y, v.z);
-    }
-    pos.needsUpdate = true;
-  }
-
   geo.computeBoundingBox();
   const box = geo.boundingBox!;
   const center = new THREE.Vector3();
@@ -136,7 +93,6 @@ export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry
   }
   pos.needsUpdate = true;
 
-  // Spherical UVs after weld (avoid lathe UV seam fighting the weld).
   const uvs = new Float32Array(pos.count * 2);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);

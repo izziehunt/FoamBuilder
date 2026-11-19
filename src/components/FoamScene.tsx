@@ -9,7 +9,7 @@ import {
 import { Suspense, useLayoutEffect, useRef } from "react";
 import type { Group } from "three";
 import { FoamMesh } from "./FoamMesh";
-import type { SculptMode, StarterShape } from "@/lib/types";
+import type { SculptMode } from "@/lib/types";
 
 /** Contact shadow plane must not eat pointer hits on the sponge bottom. */
 function StudioShadows() {
@@ -34,18 +34,20 @@ function StudioShadows() {
 
 type FoamSceneProps = {
   mode: SculptMode;
-  shape: StarterShape;
   shapeVersion: number;
   brushRadius: number;
   brushStrength: number;
+  foamColor: string;
+  bgColor: string;
 };
 
 export function FoamScene({
   mode,
-  shape,
   shapeVersion,
   brushRadius,
   brushStrength,
+  foamColor,
+  bgColor,
 }: FoamSceneProps) {
   return (
     <Canvas
@@ -59,8 +61,7 @@ export function FoamScene({
       dpr={[1, 2]}
       style={{ touchAction: "none" }}
     >
-      {/* Clean white studio backdrop like the reference photo. */}
-      <color attach="background" args={["#ffffff"]} />
+      <color attach="background" args={[bgColor]} />
 
       <ambientLight intensity={0.55} color="#ffffff" />
       <hemisphereLight args={["#ffffff", "#e8e4de", 0.65]} />
@@ -81,13 +82,12 @@ export function FoamScene({
       <directionalLight position={[-3.5, 3, -2]} intensity={0.4} color="#f5f2ec" />
       <directionalLight position={[0, 2, 4]} intensity={0.35} color="#ffffff" />
 
-      {/* Mesh renders immediately — don't block on HDR environment fetch. */}
       <FoamMesh
         mode={mode}
-        shape={shape}
         shapeVersion={shapeVersion}
         brushRadius={brushRadius}
         brushStrength={brushStrength}
+        foamColor={foamColor}
       />
       <StudioShadows />
       <Suspense fallback={null}>

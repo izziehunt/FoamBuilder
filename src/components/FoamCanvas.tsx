@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { SculptMode, StarterShape } from "@/lib/types";
+import type { SculptMode } from "@/lib/types";
 
 const FoamScene = dynamic(
   () => import("./FoamScene").then((m) => m.FoamScene),
@@ -17,10 +17,11 @@ const FoamScene = dynamic(
 
 type FoamCanvasProps = {
   mode: SculptMode;
-  shape: StarterShape;
   shapeVersion: number;
   brushRadius: number;
   brushStrength: number;
+  foamColor: string;
+  bgColor: string;
 };
 
 export function FoamCanvas(props: FoamCanvasProps) {

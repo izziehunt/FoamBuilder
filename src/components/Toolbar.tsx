@@ -1,16 +1,18 @@
 "use client";
 
-import type { SculptMode, StarterShape } from "@/lib/types";
+import type { SculptMode } from "@/lib/types";
 
 type ToolbarProps = {
   mode: SculptMode;
-  shape: StarterShape;
   brushRadius: number;
   brushStrength: number;
+  foamColor: string;
+  bgColor: string;
   onMode: (mode: SculptMode) => void;
-  onShape: (shape: StarterShape) => void;
   onBrushRadius: (v: number) => void;
   onBrushStrength: (v: number) => void;
+  onFoamColor: (v: string) => void;
+  onBgColor: (v: string) => void;
   onReset: () => void;
 };
 
@@ -20,21 +22,17 @@ const modes: { id: SculptMode; label: string; hint: string }[] = [
   { id: "inflate", label: "Inflate", hint: "Hold to bloat the foam" },
 ];
 
-const shapes: { id: StarterShape; label: string }[] = [
-  { id: "blank", label: "Beauty blender" },
-  { id: "face", label: "Face hint" },
-  { id: "figure", label: "Body hint" },
-];
-
 export function Toolbar({
   mode,
-  shape,
   brushRadius,
   brushStrength,
+  foamColor,
+  bgColor,
   onMode,
-  onShape,
   onBrushRadius,
   onBrushStrength,
+  onFoamColor,
+  onBgColor,
   onReset,
 }: ToolbarProps) {
   const activeHint = modes.find((m) => m.id === mode)?.hint ?? "";
@@ -59,17 +57,25 @@ export function Toolbar({
         ))}
       </div>
 
-      <div className="toolbar-group" role="group" aria-label="Starter shape">
-        {shapes.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={shape === s.id ? "tool active" : "tool"}
-            onClick={() => onShape(s.id)}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="color-row" role="group" aria-label="Colors">
+        <label className="color-field">
+          <span>Sponge</span>
+          <input
+            type="color"
+            value={foamColor}
+            onChange={(e) => onFoamColor(e.target.value)}
+            aria-label="Beauty blender color"
+          />
+        </label>
+        <label className="color-field">
+          <span>Background</span>
+          <input
+            type="color"
+            value={bgColor}
+            onChange={(e) => onBgColor(e.target.value)}
+            aria-label="Background color"
+          />
+        </label>
       </div>
 
       <label className="slider">

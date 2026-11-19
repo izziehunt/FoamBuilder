@@ -15,7 +15,7 @@ const sans = Outfit({
 export const metadata: Metadata = {
   title: "FoamBuilder",
   description:
-    "Sculpt soft foam into faces and figures — cinch folds, inflate volume.",
+    "Sculpt a soft beauty blender — cinch folds, inflate volume, pick your colors.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

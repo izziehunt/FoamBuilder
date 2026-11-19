@@ -66,19 +66,11 @@ export function createFoamTextures(size = 1024): FoamMaps {
   const rctx = roughness.getContext("2d")!;
   const rImg = rctx.createImageData(size, size);
 
-  // Classic nude beauty-blender latex — warm peach with cooler pore wells.
-  const baseR = 246;
-  const baseG = 210;
-  const baseB = 192;
-  const poreR = 186;
-  const poreG = 138;
-  const poreB = 124;
-  const wallR = 252;
-  const wallG = 228;
-  const wallB = 214;
-  const deepR = 168;
-  const deepG = 118;
-  const deepB = 108;
+  // Neutral foam luminance — hue comes from material.color tint.
+  const base = 245;
+  const pore = 168;
+  const wall = 252;
+  const deep = 148;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -98,45 +90,25 @@ export function createFoamTextures(size = 1024): FoamMaps {
       const wallMix =
         THREE_Math_smoothstep(0.58, 0.95, h) * (0.25 + edge * 0.55) * 0.5;
 
-      let r = lerp(baseR, poreR, poreMix);
-      let g = lerp(baseG, poreG, poreMix);
-      let b = lerp(baseB, poreB, poreMix);
-      r = lerp(r, deepR, deepMix);
-      g = lerp(g, deepG, deepMix);
-      b = lerp(b, deepB, deepMix);
-      r = lerp(r, wallR, wallMix);
-      g = lerp(g, wallG, wallMix);
-      b = lerp(b, wallB, wallMix);
+      let lum = lerp(base, pore, poreMix);
+      lum = lerp(lum, deep, deepMix);
+      lum = lerp(lum, wall, wallMix);
 
-      // Soft AO in pore bowls.
       const ao = 1 - THREE_Math_smoothstep(0.25, 0.75, 1 - h) * 0.22;
-      r *= ao;
-      g *= ao;
-      b *= ao;
+      lum *= ao;
 
-      // Fine latex grain + sparse darker speckles (real sponge flecks).
       const gAmt = (grain - 0.5) * 6.5;
-      r = clamp(r + gAmt);
-      g = clamp(g + gAmt * 0.88);
-      b = clamp(b + gAmt * 0.78);
-      if (speck > 0.985) {
-        r = clamp(r * 0.88);
-        g = clamp(g * 0.86);
-        b = clamp(b * 0.84);
-      }
+      lum = clamp(lum + gAmt);
+      if (speck > 0.985) lum = clamp(lum * 0.88);
 
-      // Slight warmth variation across the surface.
-      const warmth = (fbm(u * 2.5 + 1, v * 2.5) - 0.5) * 5;
-      r = clamp(r + warmth);
-      g = clamp(g + warmth * 0.35);
-      b = clamp(b - warmth * 0.15);
+      const soft = (fbm(u * 2.5 + 1, v * 2.5) - 0.5) * 4;
+      lum = clamp(lum + soft);
 
-      aImg.data[i] = r;
-      aImg.data[i + 1] = g;
-      aImg.data[i + 2] = b;
+      aImg.data[i] = lum;
+      aImg.data[i + 1] = lum;
+      aImg.data[i + 2] = lum;
       aImg.data[i + 3] = 255;
 
-      // Matte latex; pore wells slightly smoother / darker roughness.
       const rough = clamp(228 + h * 22 - poreMix * 18 + edge * 8);
       rImg.data[i] = rough;
       rImg.data[i + 1] = rough;

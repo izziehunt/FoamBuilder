@@ -12,14 +12,14 @@ import {
   dragScratch,
 } from "@/lib/sculpt";
 import { createFoamMaterial } from "@/lib/foamMaterial";
-import type { SculptMode, StarterShape } from "@/lib/types";
+import type { SculptMode } from "@/lib/types";
 
 type FoamMeshProps = {
   mode: SculptMode;
-  shape: StarterShape;
   shapeVersion: number;
   brushRadius: number;
   brushStrength: number;
+  foamColor: string;
 };
 
 const _proj = new THREE.Vector3();
@@ -71,10 +71,10 @@ function pickFoamHit(
 
 export function FoamMesh({
   mode,
-  shape,
   shapeVersion,
   brushRadius,
   brushStrength,
+  foamColor,
 }: FoamMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const sculpting = useRef(false);
@@ -100,16 +100,21 @@ export function FoamMesh({
   const { camera, gl } = useThree();
 
   const geometry = useMemo(
-    () => createStarterGeometry(shape),
+    () => createStarterGeometry(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shape, shapeVersion],
+    [shapeVersion],
   );
 
   const adjacency = useMemo(() => buildAdjacency(geometry), [geometry]);
   const adjacencyRef = useRef(adjacency);
   adjacencyRef.current = adjacency;
 
-  const material = useMemo(() => createFoamMaterial(), []);
+  const material = useMemo(() => createFoamMaterial(foamColor), []);
+
+  useEffect(() => {
+    material.color.set(foamColor);
+    material.sheenColor.copy(material.color).lerp(new THREE.Color("#ffffff"), 0.35);
+  }, [foamColor, material]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(
