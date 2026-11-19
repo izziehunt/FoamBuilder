@@ -8,6 +8,8 @@ import {
   applyCinch,
   applyInflate,
   buildAdjacency,
+  copyDragDelta,
+  dragScratch,
 } from "@/lib/sculpt";
 import { createFoamMaterial } from "@/lib/foamMaterial";
 import type { SculptMode, StarterShape } from "@/lib/types";
@@ -31,14 +33,22 @@ export function FoamMesh({
   const sculpting = useRef(false);
   const lastHit = useRef(new THREE.Vector3());
   const hitLocal = useRef(new THREE.Vector3());
-  const dragLocal = useRef(new THREE.Vector3());
   const worldHit = useRef(new THREE.Vector3());
   const invMatrix = useRef(new THREE.Matrix4());
   const raycaster = useRef(new THREE.Raycaster());
   const pointerNdc = useRef(new THREE.Vector2());
   const lastSculptMs = useRef(0);
+  const normalStroke = useRef(0);
+  const pendingPointer = useRef<{ x: number; y: number; isDrag: boolean } | null>(
+    null,
+  );
+  const rafId = useRef(0);
   const modeRef = useRef(mode);
+  const brushRadiusRef = useRef(brushRadius);
+  const brushStrengthRef = useRef(brushStrength);
   modeRef.current = mode;
+  brushRadiusRef.current = brushRadius;
+  brushStrengthRef.current = brushStrength;
 
   const { camera, gl } = useThree();
 
@@ -49,6 +59,8 @@ export function FoamMesh({
   );
 
   const adjacency = useMemo(() => buildAdjacency(geometry), [geometry]);
+  const adjacencyRef = useRef(adjacency);
+  adjacencyRef.current = adjacency;
 
   const material = useMemo(() => createFoamMaterial(), []);
 
@@ -63,12 +75,12 @@ export function FoamMesh({
     [material],
   );
 
-  const recomputeNormals = useCallback(() => {
+  const recomputeNormals = useCallback((full = true) => {
     const mesh = meshRef.current;
     if (!mesh) return;
     mesh.geometry.computeVertexNormals();
     mesh.geometry.getAttribute("normal").needsUpdate = true;
-    mesh.geometry.computeBoundingSphere();
+    if (full) mesh.geometry.computeBoundingSphere();
   }, []);
 
   const sculptAtPointer = useCallback(
@@ -78,7 +90,8 @@ export function FoamMesh({
       if (!mesh || currentMode === "orbit") return false;
 
       const now = performance.now();
-      if (isDrag && now - lastSculptMs.current < 24) return true;
+      // ~30Hz brush — normals are the expensive bit; coalesce below.
+      if (isDrag && now - lastSculptMs.current < 32) return true;
       lastSculptMs.current = now;
 
       const rect = gl.domElement.getBoundingClientRect();
@@ -95,55 +108,61 @@ export function FoamMesh({
 
       const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
       const nrm = mesh.geometry.getAttribute("normal") as THREE.BufferAttribute;
+      const radius = brushRadiusRef.current;
+      const strength = brushStrengthRef.current;
+      const adj = adjacencyRef.current;
 
       if (currentMode === "cinch") {
-        dragLocal.current.copy(
-          isDrag
-            ? hitLocal.current.clone().sub(lastHit.current)
-            : new THREE.Vector3(),
-        );
         applyCinch(
           pos,
           nrm,
           hitLocal.current,
-          dragLocal.current,
-          brushRadius,
-          brushStrength,
-          adjacency,
+          copyDragDelta(dragScratch, hitLocal.current, lastHit.current, isDrag),
+          radius,
+          strength,
+          adj,
         );
       } else if (currentMode === "inflate") {
-        applyInflate(
-          pos,
-          nrm,
-          hitLocal.current,
-          brushRadius,
-          brushStrength,
-          adjacency,
-        );
+        applyInflate(pos, nrm, hitLocal.current, radius, strength, adj);
       }
 
       lastHit.current.copy(hitLocal.current);
-      recomputeNormals();
+
+      // Full normals every 3rd stroke while dragging; always on press.
+      normalStroke.current += 1;
+      if (!isDrag || normalStroke.current % 3 === 0) {
+        recomputeNormals(false);
+      }
       return true;
     },
-    [
-      adjacency,
-      brushRadius,
-      brushStrength,
-      camera,
-      gl.domElement,
-      recomputeNormals,
-    ],
+    [camera, gl.domElement, recomputeNormals],
   );
 
-  // Canvas-level pointers so the contact-shadow plane can't steal bottom hits,
-  // and leaving the mesh mid-stroke doesn't cancel cinch/inflate.
+  const flushPending = useCallback(() => {
+    rafId.current = 0;
+    const p = pendingPointer.current;
+    if (!p) return;
+    pendingPointer.current = null;
+    sculptAtPointer(p.x, p.y, p.isDrag);
+  }, [sculptAtPointer]);
+
+  const queueSculpt = useCallback(
+    (clientX: number, clientY: number, isDrag: boolean) => {
+      pendingPointer.current = { x: clientX, y: clientY, isDrag };
+      if (rafId.current) return;
+      rafId.current = requestAnimationFrame(flushPending);
+    },
+    [flushPending],
+  );
+
   useEffect(() => {
     const el = gl.domElement;
 
     const onDown = (e: PointerEvent) => {
       if (modeRef.current === "orbit" || e.button !== 0) return;
       lastSculptMs.current = 0;
+      normalStroke.current = 0;
+      // Immediate first hit (no rAF delay on press).
       const hit = sculptAtPointer(e.clientX, e.clientY, false);
       if (!hit) return;
       sculpting.current = true;
@@ -152,12 +171,19 @@ export function FoamMesh({
 
     const onMove = (e: PointerEvent) => {
       if (!sculpting.current || modeRef.current === "orbit") return;
-      sculptAtPointer(e.clientX, e.clientY, true);
+      queueSculpt(e.clientX, e.clientY, true);
     };
 
     const onUp = (e: PointerEvent) => {
       if (!sculpting.current) return;
       sculpting.current = false;
+      if (rafId.current) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = 0;
+      }
+      pendingPointer.current = null;
+      // Final normals + bounds after the stroke.
+      recomputeNormals(true);
       try {
         el.releasePointerCapture(e.pointerId);
       } catch {
@@ -174,8 +200,9 @@ export function FoamMesh({
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onUp);
+      if (rafId.current) cancelAnimationFrame(rafId.current);
     };
-  }, [gl.domElement, sculptAtPointer]);
+  }, [gl.domElement, queueSculpt, recomputeNormals, sculptAtPointer]);
 
   useFrame((_, dt) => {
     const mesh = meshRef.current;

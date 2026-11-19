@@ -7,10 +7,20 @@ const _tangent = new THREE.Vector3();
 const _across = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _avg = new THREE.Vector3();
+const _drag = new THREE.Vector3();
+
+/** Reused across strokes — avoid per-frame GC. */
+let scratch = new Float32Array(0);
+const affected: number[] = [];
+
+function ensureScratch(count: number) {
+  if (scratch.length < count * 3) {
+    scratch = new Float32Array(count * 3);
+  }
+}
 
 function falloff(t: number) {
   const x = 1 - THREE.MathUtils.clamp(t, 0, 1);
-  // Smooth, wide soft-body falloff.
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 
@@ -40,52 +50,71 @@ export function buildAdjacency(geometry: THREE.BufferGeometry): number[][] {
   return sets.map((s) => Array.from(s));
 }
 
-export function laplacianSmooth(
+/** Laplacian only on verts already gathered in `affected`. */
+function laplacianSmoothLocal(
   positions: THREE.BufferAttribute,
   adjacency: number[][],
   hitLocal: THREE.Vector3,
   radius: number,
   amount: number,
 ) {
-  const scratch = new Float32Array(positions.count * 3);
+  const r = radius * 1.25;
+  const rSq = r * r;
+  ensureScratch(affected.length);
 
-  for (let i = 0; i < positions.count; i++) {
+  for (let k = 0; k < affected.length; k++) {
+    const i = affected[k];
     _v.fromBufferAttribute(positions, i);
-    const dist = _v.distanceTo(hitLocal);
-    if (dist > radius * 1.25) {
-      scratch[i * 3] = _v.x;
-      scratch[i * 3 + 1] = _v.y;
-      scratch[i * 3 + 2] = _v.z;
+    const distSq = _v.distanceToSquared(hitLocal);
+    if (distSq > rSq) {
+      scratch[k * 3] = _v.x;
+      scratch[k * 3 + 1] = _v.y;
+      scratch[k * 3 + 2] = _v.z;
       continue;
     }
 
     const neighbors = adjacency[i];
     if (!neighbors.length) {
-      scratch[i * 3] = _v.x;
-      scratch[i * 3 + 1] = _v.y;
-      scratch[i * 3 + 2] = _v.z;
+      scratch[k * 3] = _v.x;
+      scratch[k * 3 + 1] = _v.y;
+      scratch[k * 3 + 2] = _v.z;
       continue;
     }
 
     _avg.set(0, 0, 0);
-    for (const j of neighbors) {
+    for (let n = 0; n < neighbors.length; n++) {
+      const j = neighbors[n];
       _avg.x += positions.getX(j);
       _avg.y += positions.getY(j);
       _avg.z += positions.getZ(j);
     }
     _avg.multiplyScalar(1 / neighbors.length);
 
-    const w = falloff(dist / (radius * 1.25)) * amount;
+    const dist = Math.sqrt(distSq);
+    const w = falloff(dist / r) * amount;
     _tmp.copy(_v).lerp(_avg, w);
-    scratch[i * 3] = _tmp.x;
-    scratch[i * 3 + 1] = _tmp.y;
-    scratch[i * 3 + 2] = _tmp.z;
+    scratch[k * 3] = _tmp.x;
+    scratch[k * 3 + 1] = _tmp.y;
+    scratch[k * 3 + 2] = _tmp.z;
   }
 
-  for (let i = 0; i < positions.count; i++) {
-    positions.setXYZ(i, scratch[i * 3], scratch[i * 3 + 1], scratch[i * 3 + 2]);
+  for (let k = 0; k < affected.length; k++) {
+    const i = affected[k];
+    positions.setXYZ(i, scratch[k * 3], scratch[k * 3 + 1], scratch[k * 3 + 2]);
   }
-  positions.needsUpdate = true;
+}
+
+function gatherAffected(
+  positions: THREE.BufferAttribute,
+  hitLocal: THREE.Vector3,
+  radius: number,
+) {
+  affected.length = 0;
+  const rSq = radius * radius * 1.5625; // (1.25r)^2 for smooth halo
+  for (let i = 0; i < positions.count; i++) {
+    _v.fromBufferAttribute(positions, i);
+    if (_v.distanceToSquared(hitLocal) <= rSq) affected.push(i);
+  }
 }
 
 /**
@@ -105,11 +134,16 @@ export function applyCinch(
   if (hasDrag) _across.copy(dragDeltaLocal).normalize();
   else _across.set(0, 1, 0);
 
-  for (let i = 0; i < positions.count; i++) {
-    _v.fromBufferAttribute(positions, i);
-    const dist = _v.distanceTo(hitLocal);
-    if (dist > radius) continue;
+  const rSq = radius * radius;
+  gatherAffected(positions, hitLocal, radius);
 
+  for (let k = 0; k < affected.length; k++) {
+    const i = affected[k];
+    _v.fromBufferAttribute(positions, i);
+    const distSq = _v.distanceToSquared(hitLocal);
+    if (distSq > rSq) continue;
+
+    const dist = Math.sqrt(distSq);
     const t = dist / radius;
     const w = falloff(t) * s;
     const lips = lipCurve(t) * s;
@@ -120,16 +154,12 @@ export function applyCinch(
     _tangent.copy(_offset).addScaledVector(_n, -alongN);
     const tangentialLen = _tangent.length();
 
-    // Squeeze toward crease (keep a floor so surface never tears).
     if (tangentialLen > radius * 0.06) {
       const compress = Math.min(tangentialLen * 0.08, radius * 0.02) * w;
       _v.addScaledVector(_tangent.normalize(), -compress);
     }
 
-    // Soft valley.
     _v.addScaledVector(_n, -w * 0.07);
-
-    // Bunched foam lips.
     _v.addScaledVector(_n, lips * 0.04);
 
     if (hasDrag) {
@@ -145,8 +175,8 @@ export function applyCinch(
   }
 
   positions.needsUpdate = true;
-  laplacianSmooth(positions, adjacency, hitLocal, radius, 0.45);
-  laplacianSmooth(positions, adjacency, hitLocal, radius, 0.3);
+  // One strong smooth pass (was two full-mesh passes — main lag source).
+  laplacianSmoothLocal(positions, adjacency, hitLocal, radius, 0.55);
 }
 
 /** Soft inflate — sponge swelling under the brush. */
@@ -159,18 +189,37 @@ export function applyInflate(
   adjacency: number[][],
 ) {
   const s = strength * 0.14;
+  const rSq = radius * radius;
+  gatherAffected(positions, hitLocal, radius);
 
-  for (let i = 0; i < positions.count; i++) {
+  for (let k = 0; k < affected.length; k++) {
+    const i = affected[k];
     _v.fromBufferAttribute(positions, i);
-    const dist = _v.distanceTo(hitLocal);
-    if (dist > radius) continue;
+    const distSq = _v.distanceToSquared(hitLocal);
+    if (distSq > rSq) continue;
 
-    const w = falloff(dist / radius) * s;
+    const w = falloff(Math.sqrt(distSq) / radius) * s;
     _n.fromBufferAttribute(normals, i);
     _v.addScaledVector(_n, w * 0.085);
     positions.setXYZ(i, _v.x, _v.y, _v.z);
   }
 
   positions.needsUpdate = true;
-  laplacianSmooth(positions, adjacency, hitLocal, radius, 0.35);
+  laplacianSmoothLocal(positions, adjacency, hitLocal, radius, 0.35);
 }
+
+/** Avoid allocating Vector3 on every cinch drag. */
+export function copyDragDelta(
+  out: THREE.Vector3,
+  hit: THREE.Vector3,
+  last: THREE.Vector3,
+  isDrag: boolean,
+) {
+  if (!isDrag) {
+    out.set(0, 0, 0);
+    return out;
+  }
+  return out.copy(hit).sub(last);
+}
+
+export { _drag as dragScratch };

@@ -68,8 +68,9 @@ function weldByPosition(
  */
 export function createStarterGeometry(shape: StarterShape): THREE.BufferGeometry {
   const height = 1.7;
-  const segments = 128;
-  const radial = 96;
+  // Dense enough to stay smooth; lighter than 128×96 for brush perf.
+  const segments = 96;
+  const radial = 72;
 
   // Single convex Bézier: round bottom → belly → cohesive soft tip (no separate cap).
   const silhouette = new THREE.CubicBezierCurve(

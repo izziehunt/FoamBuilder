@@ -69,7 +69,7 @@ export function FoamScene({
         position={[4, 7, 3]}
         intensity={1.35}
         color="#ffffff"
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0002}
         shadow-camera-near={0.5}
         shadow-camera-far={20}
