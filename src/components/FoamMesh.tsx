@@ -99,7 +99,12 @@ export function FoamMesh({
       pointerNdc.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.current.setFromCamera(pointerNdc.current, camera);
+      // Hit both sides so the rounded underside/belly always receives the brush.
+      const mat = mesh.material as THREE.Material;
+      const prevSide = mat.side;
+      mat.side = THREE.DoubleSide;
       const hits = raycaster.current.intersectObject(mesh, false);
+      mat.side = prevSide;
       if (!hits.length) return false;
 
       worldHit.current.copy(hits[0].point);

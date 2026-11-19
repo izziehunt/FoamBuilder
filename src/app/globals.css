@@ -91,6 +91,15 @@ body {
   backdrop-filter: blur(14px) saturate(1.1);
   box-shadow: 0 12px 36px rgba(30, 28, 24, 0.1);
   animation: toolbar-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* Panel chrome must not block sculpting the sponge bottom underneath. */
+  pointer-events: none;
+}
+
+.toolbar .tool,
+.toolbar .slider,
+.toolbar input,
+.toolbar button {
+  pointer-events: auto;
 }
 
 @media (min-width: 900px) {
