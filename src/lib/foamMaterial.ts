@@ -34,5 +34,7 @@ export function createFoamMaterial(): THREE.MeshPhysicalMaterial {
     clearcoat: 0,
     envMapIntensity: 0.08,
     flatShading: false,
+    // So the rounded belly/underside always receives brush raycasts.
+    side: THREE.DoubleSide,
   });
 }

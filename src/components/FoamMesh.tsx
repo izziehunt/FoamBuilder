@@ -22,6 +22,53 @@ type FoamMeshProps = {
   brushStrength: number;
 };
 
+const _proj = new THREE.Vector3();
+const _world = new THREE.Vector3();
+
+/**
+ * Triangle raycast, then screen-space vertex fallback.
+ * Fallback fixes the “brush sticks mid-body” miss on the lower belly
+ * (stale bounds / grazing angles / mobile viewport quirks).
+ */
+function pickFoamHit(
+  mesh: THREE.Mesh,
+  raycaster: THREE.Raycaster,
+  camera: THREE.Camera,
+  ndc: THREE.Vector2,
+  outWorld: THREE.Vector3,
+): boolean {
+  const geo = mesh.geometry;
+  geo.computeBoundingSphere();
+
+  const hits = raycaster.intersectObject(mesh, false);
+  if (hits.length) {
+    outWorld.copy(hits[0].point);
+    return true;
+  }
+
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  mesh.updateWorldMatrix(true, false);
+  const maxD2 = 0.055 * 0.055; // ~screen proximity in NDC
+  let bestD2 = maxD2;
+  let best = -1;
+
+  for (let i = 0; i < pos.count; i++) {
+    _proj.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld).project(camera);
+    if (_proj.z < -1 || _proj.z > 1) continue;
+    const dx = _proj.x - ndc.x;
+    const dy = _proj.y - ndc.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = i;
+    }
+  }
+
+  if (best < 0) return false;
+  outWorld.fromBufferAttribute(pos, best).applyMatrix4(mesh.matrixWorld);
+  return true;
+}
+
 export function FoamMesh({
   mode,
   shape,
@@ -90,24 +137,28 @@ export function FoamMesh({
       if (!mesh || currentMode === "orbit") return false;
 
       const now = performance.now();
-      // ~30Hz brush — normals are the expensive bit; coalesce below.
       if (isDrag && now - lastSculptMs.current < 32) return true;
       lastSculptMs.current = now;
 
       const rect = gl.domElement.getBoundingClientRect();
-      pointerNdc.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      pointerNdc.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      const w = rect.width || 1;
+      const h = rect.height || 1;
+      pointerNdc.current.x = ((clientX - rect.left) / w) * 2 - 1;
+      pointerNdc.current.y = -((clientY - rect.top) / h) * 2 + 1;
 
       raycaster.current.setFromCamera(pointerNdc.current, camera);
-      // Hit both sides so the rounded underside/belly always receives the brush.
-      const mat = mesh.material as THREE.Material;
-      const prevSide = mat.side;
-      mat.side = THREE.DoubleSide;
-      const hits = raycaster.current.intersectObject(mesh, false);
-      mat.side = prevSide;
-      if (!hits.length) return false;
+      if (
+        !pickFoamHit(
+          mesh,
+          raycaster.current,
+          camera,
+          pointerNdc.current,
+          worldHit.current,
+        )
+      ) {
+        return false;
+      }
 
-      worldHit.current.copy(hits[0].point);
       invMatrix.current.copy(mesh.matrixWorld).invert();
       hitLocal.current.copy(worldHit.current).applyMatrix4(invMatrix.current);
 
@@ -133,10 +184,9 @@ export function FoamMesh({
 
       lastHit.current.copy(hitLocal.current);
 
-      // Full normals every 3rd stroke while dragging; always on press.
       normalStroke.current += 1;
       if (!isDrag || normalStroke.current % 3 === 0) {
-        recomputeNormals(false);
+        recomputeNormals(true);
       }
       return true;
     },
@@ -167,7 +217,6 @@ export function FoamMesh({
       if (modeRef.current === "orbit" || e.button !== 0) return;
       lastSculptMs.current = 0;
       normalStroke.current = 0;
-      // Immediate first hit (no rAF delay on press).
       const hit = sculptAtPointer(e.clientX, e.clientY, false);
       if (!hit) return;
       sculpting.current = true;
@@ -187,7 +236,6 @@ export function FoamMesh({
         rafId.current = 0;
       }
       pendingPointer.current = null;
-      // Final normals + bounds after the stroke.
       recomputeNormals(true);
       try {
         el.releasePointerCapture(e.pointerId);

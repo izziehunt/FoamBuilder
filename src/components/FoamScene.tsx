@@ -22,11 +22,11 @@ function StudioShadows() {
   return (
     <ContactShadows
       ref={ref}
-      position={[0, -0.95, 0]}
-      opacity={0.3}
-      scale={10}
+      position={[0, -1.35, 0]}
+      opacity={0.28}
+      scale={12}
       blur={3.4}
-      far={4}
+      far={5}
       color="#8a847c"
     />
   );
