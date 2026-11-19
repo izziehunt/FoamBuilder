@@ -23,7 +23,6 @@ type FoamMeshProps = {
 };
 
 const _proj = new THREE.Vector3();
-const _world = new THREE.Vector3();
 
 /**
  * Triangle raycast, then screen-space vertex fallback.
