@@ -1,7 +1,8 @@
 import type { BufferAttribute } from "three";
 
 /**
- * Procedural beauty-blender foam — dense organic latex pores with soft AO.
+ * Procedural open-cell foam maps matched to beauty-blender / upholstery references:
+ * light membrane webbing around darker recessed pores, fine grain, soft AO.
  */
 
 export type FoamMaps = {
@@ -14,43 +15,51 @@ export type FoamMaps = {
 
 export function createFoamTextures(size = 1024): FoamMaps {
   const height = new Float32Array(size * size);
+  const cellField = new Float32Array(size * size);
+  const edgeField = new Float32Array(size * size);
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const u = x / size;
       const v = y / size;
+      const idx = y * size + x;
 
-      // Domain warp so cells feel organic, not a regular grid.
-      const warpX = (fbm(u * 6.5 + 2.1, v * 6.5) - 0.5) * 0.045;
-      const warpY = (fbm(u * 6.5, v * 6.5 + 4.7) - 0.5) * 0.045;
+      // Organic warp so cells aren't a grid.
+      const warpX = (fbm(u * 5.5 + 1.7, v * 5.5) - 0.5) * 0.055;
+      const warpY = (fbm(u * 5.5, v * 5.5 + 3.1) - 0.5) * 0.055;
       const wu = u + warpX;
       const wv = v + warpY;
 
-      // Open-cell latex: large bowls + mid cells + micro pits.
-      const cell = worley(wu * 78, wv * 78);
-      const mid = worley(wu * 140 + 9, wv * 140 + 3);
-      const fine = worley(wu * 260 + 21, wv * 260 + 11);
-      const micro = worley(wu * 420 + 41, wv * 420 + 7);
-      const macro = fbm(u * 3.2, v * 3.2);
+      // Primary open cells (visible pore bowls) + finer secondary foam.
+      const cell = worley(wu * 92, wv * 92);
+      const edge = worleyEdge(wu * 92, wv * 92);
+      const mid = worley(wu * 168 + 11, wv * 168 + 4);
+      const midEdge = worleyEdge(wu * 168 + 11, wv * 168 + 4);
+      const fine = worley(wu * 310 + 23, wv * 310 + 13);
+      const micro = worley(wu * 520 + 47, wv * 520 + 9);
+      const macro = fbm(u * 2.8, v * 2.8);
 
-      // F2-F1 edge accent for soft cell walls (foam membrane look).
-      const edge = worleyEdge(wu * 78, wv * 78);
+      cellField[idx] = cell;
+      edgeField[idx] = edge;
 
-      const pit = Math.pow(cell, 0.95);
-      const midPit = Math.pow(mid, 1.15);
-      const finePit = Math.pow(fine, 1.3);
-      const microPit = Math.pow(micro, 1.5);
+      // Deep rounded pits with raised latex membranes between them.
+      const pit = Math.pow(cell, 0.88);
+      const midPit = Math.pow(mid, 1.05);
+      const finePit = Math.pow(fine, 1.25);
+      const microPit = Math.pow(micro, 1.45);
 
-      let h = 0.8 + macro * 0.05;
-      h -= pit * 0.38;
-      h -= midPit * 0.14;
-      h -= finePit * 0.09;
-      h -= microPit * 0.05;
-      // Soft raised membranes between pores.
-      h += edge * 0.07;
-      h += Math.pow(Math.max(0, 0.42 - cell), 2.1) * 0.06;
+      let h = 0.82 + macro * 0.04;
+      h -= pit * 0.48;
+      h -= midPit * 0.18;
+      h -= finePit * 0.1;
+      h -= microPit * 0.055;
+      // Bright webbing / cell walls (the light ridges in the reference).
+      h += edge * 0.14;
+      h += midEdge * 0.05;
+      // Soft lip around each pore bowl.
+      h += Math.pow(Math.max(0, 0.38 - cell), 1.8) * 0.09;
 
-      height[y * size + x] = clamp01(h);
+      height[idx] = clamp01(h);
     }
   }
 
@@ -66,42 +75,45 @@ export function createFoamTextures(size = 1024): FoamMaps {
   const rctx = roughness.getContext("2d")!;
   const rImg = rctx.createImageData(size, size);
 
-  // Neutral foam luminance — hue comes from material.color tint.
-  const base = 245;
-  const pore = 168;
-  const wall = 252;
-  const deep = 148;
+  // Neutral luminance — material.color supplies the sponge hue.
+  // Strong wall/pore contrast like the reference open-cell foam.
+  const wallLum = 250;
+  const baseLum = 232;
+  const poreLum = 148;
+  const deepLum = 112;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
-      const h = height[y * size + x];
+      const idx = y * size + x;
+      const h = height[idx];
+      const cell = cellField[idx];
+      const edge = edgeField[idx];
       const u = x / size;
       const v = y / size;
-      const warpX = (fbm(u * 6.5 + 2.1, v * 6.5) - 0.5) * 0.045;
-      const warpY = (fbm(u * 6.5, v * 6.5 + 4.7) - 0.5) * 0.045;
-      const cell = worley((u + warpX) * 78, (v + warpY) * 78);
-      const edge = worleyEdge((u + warpX) * 78, (v + warpY) * 78);
       const grain = hash2(x * 0.37, y * 0.41);
-      const speck = hash2(x * 1.9 + 3, y * 2.3 + 8);
+      const speck = hash2(x * 2.1 + 3, y * 2.7 + 8);
 
-      const poreMix = THREE_Math_smoothstep(0.32, 0.82, 1 - h) * 0.9;
-      const deepMix = THREE_Math_smoothstep(0.55, 0.92, 1 - h) * 0.45;
-      const wallMix =
-        THREE_Math_smoothstep(0.58, 0.95, h) * (0.25 + edge * 0.55) * 0.5;
+      const poreMix = smoothstep(0.28, 0.78, 1 - h);
+      const deepMix = smoothstep(0.5, 0.9, 1 - h) * 0.7;
+      const wallMix = smoothstep(0.55, 0.96, h) * (0.35 + edge * 0.85);
 
-      let lum = lerp(base, pore, poreMix);
-      lum = lerp(lum, deep, deepMix);
-      lum = lerp(lum, wall, wallMix);
+      let lum = lerp(baseLum, poreLum, poreMix * 0.95);
+      lum = lerp(lum, deepLum, deepMix);
+      lum = lerp(lum, wallLum, wallMix * 0.7);
 
-      const ao = 1 - THREE_Math_smoothstep(0.25, 0.75, 1 - h) * 0.22;
-      lum *= ao;
+      // Pore-well AO — darker bowls like the reference.
+      const ao = 1 - smoothstep(0.2, 0.72, 1 - h) * 0.34;
+      // Extra darkening near cell centers.
+      const centerDark = 1 - Math.pow(Math.max(0, 0.55 - cell), 1.4) * 0.2;
+      lum *= ao * centerDark;
 
-      const gAmt = (grain - 0.5) * 6.5;
+      // Fine sand-like grain across the latex.
+      const gAmt = (grain - 0.5) * 8;
       lum = clamp(lum + gAmt);
-      if (speck > 0.985) lum = clamp(lum * 0.88);
+      if (speck > 0.982) lum = clamp(lum * 0.86);
 
-      const soft = (fbm(u * 2.5 + 1, v * 2.5) - 0.5) * 4;
+      const soft = (fbm(u * 3.2 + 1, v * 3.2) - 0.5) * 5;
       lum = clamp(lum + soft);
 
       aImg.data[i] = lum;
@@ -109,7 +121,8 @@ export function createFoamTextures(size = 1024): FoamMaps {
       aImg.data[i + 2] = lum;
       aImg.data[i + 3] = 255;
 
-      const rough = clamp(228 + h * 22 - poreMix * 18 + edge * 8);
+      // Dead matte; walls tiny bit rougher, deep pores slightly less.
+      const rough = clamp(242 + edge * 10 - poreMix * 10 + h * 6);
       rImg.data[i] = rough;
       rImg.data[i + 1] = rough;
       rImg.data[i + 2] = rough;
@@ -120,7 +133,8 @@ export function createFoamTextures(size = 1024): FoamMaps {
   actx.putImageData(aImg, 0, 0);
   rctx.putImageData(rImg, 0, 0);
 
-  const normal = heightToNormalCanvas(height, size, 4.0);
+  // Stronger normals so pores read as recessed open cells, not flat noise.
+  const normal = heightToNormalCanvas(height, size, 5.2);
 
   return { albedo, normal, roughness, height, size };
 }
@@ -261,7 +275,7 @@ function worleyEdge(x: number, y: number) {
       }
     }
   }
-  return clamp01((f2 - f1) * 2.2);
+  return clamp01((f2 - f1) * 2.4);
 }
 
 function worley3(x: number, y: number, z: number) {
@@ -286,7 +300,7 @@ function worley3(x: number, y: number, z: number) {
   return clamp01(minD);
 }
 
-function THREE_Math_smoothstep(min: number, max: number, x: number) {
+function smoothstep(min: number, max: number, x: number) {
   const t = clamp01((x - min) / (max - min));
   return t * t * (3 - 2 * t);
 }

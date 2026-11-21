@@ -10,7 +10,7 @@ export function FoamApp() {
   const [shapeVersion, setShapeVersion] = useState(0);
   const [brushRadius, setBrushRadius] = useState(0.52);
   const [brushStrength, setBrushStrength] = useState(0.45);
-  const [foamColor, setFoamColor] = useState("#f3d0c2");
+  const [foamColor, setFoamColor] = useState("#e8c4a8");
   const [bgColor, setBgColor] = useState("#ffffff");
 
   return (
