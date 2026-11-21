@@ -93,13 +93,16 @@ export function createStarterGeometry(): THREE.BufferGeometry {
   }
   pos.needsUpdate = true;
 
+  // Arc-length UVs keep pore size even — spherical UVs stretched the belly open.
+  const rRef = 0.42;
+  const vScale = 2.4;
   const uvs = new Float32Array(pos.count * 2);
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
-    const n = v.clone().normalize();
-    uvs[i * 2] = 0.5 + Math.atan2(n.z, n.x) / (Math.PI * 2);
-    uvs[i * 2 + 1] =
-      0.5 + Math.asin(THREE.MathUtils.clamp(n.y, -1, 1)) / Math.PI;
+    const r = Math.hypot(v.x, v.z);
+    const turn = Math.atan2(v.z, v.x) / (Math.PI * 2) + 0.5;
+    uvs[i * 2] = turn * (r / rRef);
+    uvs[i * 2 + 1] = v.y * vScale;
   }
   geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 

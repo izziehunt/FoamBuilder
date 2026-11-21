@@ -9,18 +9,19 @@ export function createFoamMaterial(
 
   const map = new THREE.CanvasTexture(maps.albedo);
   map.wrapS = map.wrapT = THREE.RepeatWrapping;
-  map.repeat.set(5.2, 5.2);
+  // Fine tip-like scale everywhere (UVs already equalize belly stretch).
+  map.repeat.set(3.4, 3.4);
   map.colorSpace = THREE.SRGBColorSpace;
   map.anisotropy = 8;
 
   const normalMap = new THREE.CanvasTexture(maps.normal);
   normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-  normalMap.repeat.set(5.2, 5.2);
+  normalMap.repeat.set(3.4, 3.4);
   normalMap.anisotropy = 8;
 
   const roughnessMap = new THREE.CanvasTexture(maps.roughness);
   roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
-  roughnessMap.repeat.set(5.2, 5.2);
+  roughnessMap.repeat.set(3.4, 3.4);
 
   const color = new THREE.Color(foamColor);
 

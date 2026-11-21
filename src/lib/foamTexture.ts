@@ -30,13 +30,13 @@ export function createFoamTextures(size = 1024): FoamMaps {
       const wu = u + warpX;
       const wv = v + warpY;
 
-      // Primary open cells (visible pore bowls) + finer secondary foam.
-      const cell = worley(wu * 92, wv * 92);
-      const edge = worleyEdge(wu * 92, wv * 92);
-      const mid = worley(wu * 168 + 11, wv * 168 + 4);
-      const midEdge = worleyEdge(wu * 168 + 11, wv * 168 + 4);
-      const fine = worley(wu * 310 + 23, wv * 310 + 13);
-      const micro = worley(wu * 520 + 47, wv * 520 + 9);
+      // Dense tip-like cells everywhere (no oversized belly pores).
+      const cell = worley(wu * 128, wv * 128);
+      const edge = worleyEdge(wu * 128, wv * 128);
+      const mid = worley(wu * 220 + 11, wv * 220 + 4);
+      const midEdge = worleyEdge(wu * 220 + 11, wv * 220 + 4);
+      const fine = worley(wu * 380 + 23, wv * 380 + 13);
+      const micro = worley(wu * 620 + 47, wv * 620 + 9);
       const macro = fbm(u * 2.8, v * 2.8);
 
       cellField[idx] = cell;
